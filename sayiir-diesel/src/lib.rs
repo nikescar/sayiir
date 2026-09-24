@@ -24,6 +24,11 @@
 use sayiir_persistence::{PersistentBackend, SnapshotStore, SignalStore};
 use thiserror::Error;
 
+#[allow(missing_docs)]
+mod schema;
+
+pub use schema::*;
+
 /// Diesel backend errors
 #[derive(Error, Debug)]
 pub enum DieselError {
