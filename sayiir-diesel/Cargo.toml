@@ -17,7 +17,7 @@ name = "sayiir_diesel"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["sqlite"]
 sqlite = ["diesel/sqlite", "diesel-async/sqlite", "diesel-async/pool", "diesel-async/deadpool"]
 postgres = ["diesel/postgres", "diesel-async/postgres", "diesel-async/pool", "diesel-async/deadpool"]
 mysql = ["diesel/mysql", "diesel-async/mysql", "diesel-async/pool", "diesel-async/deadpool"]
