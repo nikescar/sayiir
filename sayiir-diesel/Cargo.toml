@@ -1,0 +1,45 @@
+[package]
+name = "sayiir-diesel"
+description = "Diesel persistence backend for Sayiir workflow engine (SQLite, PostgreSQL, MySQL)"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+categories.workspace = true
+keywords.workspace = true
+documentation = "https://docs.rs/sayiir-diesel"
+
+[lib]
+name = "sayiir_diesel"
+path = "src/lib.rs"
+
+[features]
+default = []
+sqlite = ["diesel/sqlite", "diesel-async/sqlite", "diesel-async/deadpool"]
+postgres = ["diesel/postgres", "diesel-async/postgres", "diesel-async/deadpool"]
+mysql = ["diesel/mysql", "diesel-async/mysql", "diesel-async/deadpool"]
+
+[dependencies]
+sayiir-core = { workspace = true }
+sayiir-persistence = { workspace = true }
+diesel = { version = "2.2", default-features = false }
+diesel-async = { version = "0.5", default-features = false }
+futures-util = "0.3"
+bytes = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time"] }
+tokio-util = { version = "0.7", default-features = false }
+backon = { workspace = true }
+flume = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+sayiir-runtime = { workspace = true, features = ["rkyv", "json", "macros"] }
