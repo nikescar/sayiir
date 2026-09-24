@@ -26,8 +26,12 @@ use thiserror::Error;
 
 #[allow(missing_docs)]
 mod schema;
+mod backend;
+mod models;
 
 pub use schema::*;
+pub use backend::DieselBackend;
+pub use models::*;
 
 /// Diesel backend errors
 #[derive(Error, Debug)]
@@ -47,21 +51,6 @@ pub enum DieselError {
 
 /// Result type for Diesel backend operations
 pub type Result<T> = std::result::Result<T, DieselError>;
-
-/// Diesel backend for sayiir persistence
-pub struct DieselBackend {
-    // Will be implemented in later tasks
-}
-
-impl DieselBackend {
-    /// Create a new Diesel backend
-    ///
-    /// # Arguments
-    /// - `database_url` - Database connection string (e.g., "sqlite::memory:")
-    pub async fn new(_database_url: &str) -> Result<Self> {
-        todo!("Implement in Task 1.2")
-    }
-}
 
 #[cfg(test)]
 mod tests {
