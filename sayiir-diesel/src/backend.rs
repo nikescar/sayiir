@@ -43,27 +43,63 @@ async fn run_migrations(pool: &Pool<Connection>) -> Result<()> {
     let mut conn = pool.get().await
         .map_err(|e| DieselError::MigrationError(format!("pool error: {}", e)))?;
 
-    #[cfg(feature = "sqlite")]
-    let migration_sql = include_str!("../migrations/sqlite/2026-09-25-000001_initial/up.sql");
-
+    // List of migrations to run in order
     #[cfg(feature = "postgres")]
-    let migration_sql = include_str!("../migrations/postgres/2026-09-25-000001_initial/up.sql");
+    let migrations = vec![
+        ("000001_initial", include_str!("../migrations/postgres/2026-09-25-000001_initial/up.sql")),
+        ("000002_observability", include_str!("../migrations/postgres/2026-09-25-000002_observability/up.sql")),
+        ("000004_trace_context", include_str!("../migrations/postgres/2026-09-25-000004_trace_context/up.sql")),
+        ("000005_history_unique_version", include_str!("../migrations/postgres/2026-09-25-000005_history_unique_version/up.sql")),
+        ("000006_task_priority", include_str!("../migrations/postgres/2026-09-25-000006_task_priority/up.sql")),
+        ("000007_task_tags", include_str!("../migrations/postgres/2026-09-25-000007_task_tags/up.sql")),
+        ("000008_performance_optim", include_str!("../migrations/postgres/2026-09-25-000008_performance_optim/up.sql")),
+        ("000009_index_cleanup", include_str!("../migrations/postgres/2026-09-25-000009_index_cleanup/up.sql")),
+        ("000010_dispatch_indexes", include_str!("../migrations/postgres/2026-09-25-000010_dispatch_indexes/up.sql")),
+    ];
+
+    #[cfg(feature = "sqlite")]
+    let migrations = vec![
+        ("000001_initial", include_str!("../migrations/sqlite/2026-09-25-000001_initial/up.sql")),
+        ("000002_observability", include_str!("../migrations/sqlite/2026-09-25-000002_observability/up.sql")),
+        ("000004_trace_context", include_str!("../migrations/sqlite/2026-09-25-000004_trace_context/up.sql")),
+        ("000005_history_unique_version", include_str!("../migrations/sqlite/2026-09-25-000005_history_unique_version/up.sql")),
+        ("000006_task_priority", include_str!("../migrations/sqlite/2026-09-25-000006_task_priority/up.sql")),
+        ("000007_task_tags", include_str!("../migrations/sqlite/2026-09-25-000007_task_tags/up.sql")),
+        ("000008_performance_optim", include_str!("../migrations/sqlite/2026-09-25-000008_performance_optim/up.sql")),
+        ("000009_index_cleanup", include_str!("../migrations/sqlite/2026-09-25-000009_index_cleanup/up.sql")),
+        ("000010_dispatch_indexes", include_str!("../migrations/sqlite/2026-09-25-000010_dispatch_indexes/up.sql")),
+    ];
 
     #[cfg(feature = "mysql")]
-    let migration_sql = include_str!("../migrations/mysql/2026-09-25-000001_initial/up.sql");
+    let migrations = vec![
+        ("000001_initial", include_str!("../migrations/mysql/2026-09-25-000001_initial/up.sql")),
+        ("000002_observability", include_str!("../migrations/mysql/2026-09-25-000002_observability/up.sql")),
+        ("000004_trace_context", include_str!("../migrations/mysql/2026-09-25-000004_trace_context/up.sql")),
+        ("000005_history_unique_version", include_str!("../migrations/mysql/2026-09-25-000005_history_unique_version/up.sql")),
+        ("000006_task_priority", include_str!("../migrations/mysql/2026-09-25-000006_task_priority/up.sql")),
+        ("000007_task_tags", include_str!("../migrations/mysql/2026-09-25-000007_task_tags/up.sql")),
+        ("000008_performance_optim", include_str!("../migrations/mysql/2026-09-25-000008_performance_optim/up.sql")),
+        ("000009_index_cleanup", include_str!("../migrations/mysql/2026-09-25-000009_index_cleanup/up.sql")),
+        ("000010_dispatch_indexes", include_str!("../migrations/mysql/2026-09-25-000010_dispatch_indexes/up.sql")),
+    ];
 
-    // Parse and execute each statement
-    let statements = parse_sql_statements(migration_sql);
+    // Run each migration
+    for (name, migration_sql) in migrations {
+        tracing::debug!("Running migration: {}", name);
 
-    for stmt in statements {
-        if stmt.trim().is_empty() {
-            continue;
+        // Parse and execute each statement
+        let statements = parse_sql_statements(migration_sql);
+
+        for stmt in statements {
+            if stmt.trim().is_empty() {
+                continue;
+            }
+
+            diesel::sql_query(stmt)
+                .execute(&mut conn)
+                .await
+                .map_err(|e| DieselError::MigrationError(format!("migration {} failed: {}", name, e)))?;
         }
-
-        diesel::sql_query(stmt)
-            .execute(&mut conn)
-            .await
-            .map_err(|e| DieselError::MigrationError(format!("migration failed: {}", e)))?;
     }
 
     Ok(())
@@ -72,7 +108,6 @@ async fn run_migrations(pool: &Pool<Connection>) -> Result<()> {
 fn parse_sql_statements(sql: &str) -> Vec<String> {
     let mut statements = Vec::new();
     let mut current = String::new();
-    let mut in_comment = false;
 
     for line in sql.lines() {
         let trimmed = line.trim();
@@ -83,14 +118,12 @@ fn parse_sql_statements(sql: &str) -> Vec<String> {
         }
 
         // Handle multi-line statements
-        if !in_comment {
-            current.push_str(line);
-            current.push('\n');
+        current.push_str(line);
+        current.push('\n');
 
-            if trimmed.ends_with(';') {
-                statements.push(current.trim().to_string());
-                current.clear();
-            }
+        if trimmed.ends_with(';') {
+            statements.push(current.trim().to_string());
+            current.clear();
         }
     }
 
@@ -116,16 +149,40 @@ impl SnapshotStore for DieselBackend {
 
         let inst_id: &str = &snapshot.instance_id;
 
-        diesel::replace_into(sayiir_workflow_snapshots)
-            .values((
-                instance_id.eq(inst_id),
-                status.eq(snapshot.state.as_ref()),
-                data.eq(&data_bytes),
-                completed_task_count.eq(snapshot.completed_task_count() as i32),
-            ))
-            .execute(&mut conn)
-            .await
-            .map_err(|e| BackendError::Backend(format!("save failed: {}", e)))?;
+        #[cfg(any(feature = "sqlite", feature = "mysql"))]
+        {
+            diesel::replace_into(sayiir_workflow_snapshots)
+                .values((
+                    instance_id.eq(inst_id),
+                    status.eq(snapshot.state.as_ref()),
+                    data.eq(&data_bytes),
+                    completed_task_count.eq(snapshot.completed_task_count() as i32),
+                ))
+                .execute(&mut conn)
+                .await
+                .map_err(|e| BackendError::Backend(format!("save failed: {}", e)))?;
+        }
+
+        #[cfg(feature = "postgres")]
+        {
+            diesel::insert_into(sayiir_workflow_snapshots)
+                .values((
+                    instance_id.eq(inst_id),
+                    status.eq(snapshot.state.as_ref()),
+                    data.eq(&data_bytes),
+                    completed_task_count.eq(snapshot.completed_task_count() as i32),
+                ))
+                .on_conflict(instance_id)
+                .do_update()
+                .set((
+                    status.eq(snapshot.state.as_ref()),
+                    data.eq(&data_bytes),
+                    completed_task_count.eq(snapshot.completed_task_count() as i32),
+                ))
+                .execute(&mut conn)
+                .await
+                .map_err(|e| BackendError::Backend(format!("save failed: {}", e)))?;
+        }
 
         Ok(())
     }

@@ -18,15 +18,15 @@ path = "src/lib.rs"
 
 [features]
 default = []
-sqlite = ["diesel/sqlite", "diesel-async/sqlite", "diesel-async/deadpool"]
-postgres = ["diesel/postgres", "diesel-async/postgres", "diesel-async/deadpool"]
-mysql = ["diesel/mysql", "diesel-async/mysql", "diesel-async/deadpool"]
+sqlite = ["diesel/sqlite", "diesel-async/sqlite", "diesel-async/pool", "diesel-async/deadpool"]
+postgres = ["diesel/postgres", "diesel-async/postgres", "diesel-async/pool", "diesel-async/deadpool"]
+mysql = ["diesel/mysql", "diesel-async/mysql", "diesel-async/pool", "diesel-async/deadpool"]
 
 [dependencies]
 sayiir-core = { workspace = true }
 sayiir-persistence = { workspace = true }
-diesel = { version = "2.2", default-features = false }
-diesel-async = { version = "0.5", default-features = false }
+diesel = { version = "2.3.13", default-features = false }
+diesel-async = { version = "0.9.2", default-features = false }
 futures-util = "0.3"
 bytes = { workspace = true }
 chrono = { workspace = true }
