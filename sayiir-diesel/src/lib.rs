@@ -21,7 +21,6 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
-use sayiir_persistence::{PersistentBackend, SnapshotStore, SignalStore};
 use thiserror::Error;
 
 #[allow(missing_docs)]
