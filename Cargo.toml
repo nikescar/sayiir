@@ -4,6 +4,7 @@ members = [
     "sayiir-persistence",
     "sayiir-postgres",
     "sayiir-diesel",
+    "sayiir-openflow",
     "sayiir-d1",
     "sayiir-runtime",
     "sayiir-macros",
@@ -41,6 +42,7 @@ sayiir-persistence = { version = "1.0.0", path = "sayiir-persistence" }
 sayiir-runtime = { version = "1.0.0", path = "sayiir-runtime", default-features = false }
 sayiir-postgres = { version = "1.0.0", path = "sayiir-postgres" }
 sayiir-diesel = { version = "1.0.0", path = "sayiir-diesel" }
+sayiir-openflow = { version = "1.0.0", path = "sayiir-openflow" }
 sayiir-d1 = { version = "1.0.0", path = "sayiir-d1" }
 sayiir-cloudflare = { version = "1.0.0", path = "sayiir-cloudflare" }
 sayiir-macros = { version = "1.0.0", path = "sayiir-macros" }

@@ -1,0 +1,26 @@
+[package]
+name = "sayiir-openflow"
+description = "OpenFlow JSON and Mermaid markdown import/export for Sayiir workflow engine"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+categories.workspace = true
+keywords.workspace = true
+documentation = "https://docs.rs/sayiir-openflow"
+
+[lib]
+name = "sayiir_openflow"
+path = "src/lib.rs"
+
+[dependencies]
+sayiir-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
