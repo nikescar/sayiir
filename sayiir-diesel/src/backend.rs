@@ -37,9 +37,68 @@ async fn create_pool(database_url: &str) -> Result<Pool<Connection>> {
     Ok(pool)
 }
 
-async fn run_migrations(_pool: &Pool<Connection>) -> Result<()> {
-    // TODO: Implement migration runner
+async fn run_migrations(pool: &Pool<Connection>) -> Result<()> {
+    use diesel_async::RunQueryDsl;
+
+    let mut conn = pool.get().await
+        .map_err(|e| DieselError::MigrationError(format!("pool error: {}", e)))?;
+
+    #[cfg(feature = "sqlite")]
+    let migration_sql = include_str!("../migrations/sqlite/2026-09-25-000001_initial/up.sql");
+
+    #[cfg(feature = "postgres")]
+    let migration_sql = include_str!("../migrations/postgres/2026-09-25-000001_initial/up.sql");
+
+    #[cfg(feature = "mysql")]
+    let migration_sql = include_str!("../migrations/mysql/2026-09-25-000001_initial/up.sql");
+
+    // Parse and execute each statement
+    let statements = parse_sql_statements(migration_sql);
+
+    for stmt in statements {
+        if stmt.trim().is_empty() {
+            continue;
+        }
+
+        diesel::sql_query(stmt)
+            .execute(&mut conn)
+            .await
+            .map_err(|e| DieselError::MigrationError(format!("migration failed: {}", e)))?;
+    }
+
     Ok(())
+}
+
+fn parse_sql_statements(sql: &str) -> Vec<String> {
+    let mut statements = Vec::new();
+    let mut current = String::new();
+    let mut in_comment = false;
+
+    for line in sql.lines() {
+        let trimmed = line.trim();
+
+        // Skip comment lines
+        if trimmed.starts_with("--") {
+            continue;
+        }
+
+        // Handle multi-line statements
+        if !in_comment {
+            current.push_str(line);
+            current.push('\n');
+
+            if trimmed.ends_with(';') {
+                statements.push(current.trim().to_string());
+                current.clear();
+            }
+        }
+    }
+
+    if !current.trim().is_empty() {
+        statements.push(current.trim().to_string());
+    }
+
+    statements
 }
 
 // SnapshotStore implementation

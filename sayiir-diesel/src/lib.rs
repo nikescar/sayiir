@@ -28,6 +28,9 @@ mod schema;
 mod backend;
 mod models;
 
+#[cfg(test)]
+mod tests;
+
 pub use schema::*;
 pub use backend::DieselBackend;
 pub use models::*;
@@ -50,14 +53,3 @@ pub enum DieselError {
 
 /// Result type for Diesel backend operations
 pub type Result<T> = std::result::Result<T, DieselError>;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_placeholder() {
-        // Placeholder test to make cargo test pass
-        assert!(true);
-    }
-}
