@@ -281,4 +281,118 @@ flowchart TD
         assert!(mermaid.contains("B[B]"));
         assert!(mermaid.contains("A --> B"));
     }
+
+    // Additional comprehensive tests for Task 2.6
+
+    #[test]
+    fn test_empty_summary_validation() {
+        let json = r#"{"summary": "", "value": {"modules": []}}"#;
+        let result = import_openflow_json(json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("summary cannot be empty"));
+    }
+
+    #[test]
+    fn test_invalid_json() {
+        let json = r#"{"summary": "Test", "value": {"modules": [}"#; // Missing closing bracket
+        let result = import_openflow_json(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multiple_modules() {
+        let json = r#"{
+            "summary": "Multi-task workflow",
+            "value": {
+                "modules": [
+                    {"id": "task1", "value": {"type": "script", "path": "step1"}},
+                    {"id": "task2", "value": {"type": "script", "path": "step2"}},
+                    {"id": "task3", "value": {"type": "script", "path": "step3"}}
+                ]
+            }
+        }"#;
+        let spec = import_openflow_json(json).unwrap();
+        assert_eq!(spec.value.modules.len(), 3);
+        assert_eq!(spec.value.modules[2].id, "task3");
+    }
+
+    #[test]
+    fn test_mermaid_single_node() {
+        let mermaid = "flowchart TD\n    A[Single Node]";
+        let spec = import_mermaid(mermaid).unwrap();
+        assert_eq!(spec.value.modules.len(), 1);
+        assert_eq!(spec.value.modules[0].id, "A");
+    }
+
+    #[test]
+    fn test_mermaid_empty() {
+        let mermaid = "flowchart TD\n";
+        let spec = import_mermaid(mermaid).unwrap();
+        assert_eq!(spec.value.modules.len(), 0);
+    }
+
+    #[test]
+    fn test_mermaid_with_comments() {
+        let mermaid = r#"
+flowchart TD
+    %% This is a comment
+    A[Start]
+    B[End]
+    A --> B
+"#;
+        let spec = import_mermaid(mermaid).unwrap();
+        assert_eq!(spec.value.modules.len(), 2);
+    }
+
+    #[test]
+    fn test_export_single_module() {
+        let spec = OpenFlowSpec {
+            summary: "Single task".to_string(),
+            value: OpenFlowValue {
+                modules: vec![
+                    OpenFlowModule {
+                        id: "only".to_string(),
+                        value: OpenFlowModuleValue::Script { path: "single".to_string() },
+                    },
+                ],
+            },
+        };
+
+        let mermaid = export_mermaid(&spec).unwrap();
+        assert!(mermaid.contains("only[only]"));
+        assert!(!mermaid.contains("-->")); // No arrows for single node
+    }
+
+    #[test]
+    fn test_export_empty_workflow() {
+        let spec = OpenFlowSpec {
+            summary: "Empty".to_string(),
+            value: OpenFlowValue { modules: vec![] },
+        };
+
+        let mermaid = export_mermaid(&spec).unwrap();
+        assert_eq!(mermaid, "flowchart TD\n");
+    }
+
+    #[test]
+    fn test_json_pretty_formatting() {
+        let spec = OpenFlowSpec {
+            summary: "Test".to_string(),
+            value: OpenFlowValue {
+                modules: vec![
+                    OpenFlowModule {
+                        id: "task1".to_string(),
+                        value: OpenFlowModuleValue::Script { path: "test".to_string() },
+                    },
+                ],
+            },
+        };
+
+        let json = export_openflow_json(&spec).unwrap();
+        // Verify it's pretty-printed (contains newlines)
+        assert!(json.contains('\n'));
+        // Verify it can be re-imported
+        let reimported = import_openflow_json(&json).unwrap();
+        assert_eq!(reimported.summary, "Test");
+    }
 }
