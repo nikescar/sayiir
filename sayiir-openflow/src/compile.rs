@@ -150,6 +150,43 @@ async fn compile_node(
     let cache_dir = get_cache_dir(workflow_id, &module.id, "node")?;
     std::fs::create_dir_all(&cache_dir)?;
 
+    // Extract dependencies
+    let dependencies = if let OpenFlowModuleValue::Script { dependencies, .. } = &module.value {
+        dependencies.clone().unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+
+    // Write package.json if dependencies exist
+    if !dependencies.is_empty() {
+        let package_json = serde_json::json!({
+            "name": module.id,
+            "version": "1.0.0",
+            "dependencies": dependencies
+        });
+
+        std::fs::write(
+            cache_dir.join("package.json"),
+            serde_json::to_string_pretty(&package_json)?,
+        )?;
+
+        // Run npm install
+        let output = tokio::process::Command::new("npm")
+            .arg("install")
+            .arg("--silent")
+            .current_dir(&cache_dir)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(OpenFlowError::CompilationError {
+                module_id: module.id.clone(),
+                stderr: format!("npm install failed: {}", stderr),
+            });
+        }
+    }
+
     // Write task.js with wrapper
     let task_js = format!(
         r#"{code}
