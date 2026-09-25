@@ -44,6 +44,25 @@ async fn compile_rust(
     let cache_dir = get_cache_dir(workflow_id, &module.id, "rust")?;
     std::fs::create_dir_all(&cache_dir)?;
 
+    // Extract dependencies
+    let dependencies = if let OpenFlowModuleValue::Script { dependencies, .. } = &module.value {
+        dependencies.clone().unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+
+    // Build dependencies section for Cargo.toml
+    let mut deps_section = String::from("[dependencies]\nserde_json = \"1.0\"\n");
+    for (pkg, version) in dependencies {
+        // Skip serde_json since it's already included
+        if pkg == "serde_json" {
+            continue;
+        }
+        if let Some(ver_str) = version.as_str() {
+            deps_section.push_str(&format!("{} = \"{}\"\n", pkg, ver_str));
+        }
+    }
+
     // Write Cargo.toml
     let cargo_toml = format!(
         r#"[package]
@@ -51,10 +70,9 @@ name = "{}"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-serde_json = "1.0"
+{}
 "#,
-        module.id
+        module.id, deps_section
     );
 
     std::fs::write(cache_dir.join("Cargo.toml"), cargo_toml)?;
