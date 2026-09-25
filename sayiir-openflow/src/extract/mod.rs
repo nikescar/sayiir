@@ -30,6 +30,16 @@ impl TaskRegistry {
         self.tasks.get(task_id)
     }
 
+    /// Get task by ID or entry_point (for Node.js variable names)
+    pub fn get_by_name(&self, name: &str) -> Option<&TaskSource> {
+        // Try ID first
+        if let Some(task) = self.tasks.get(name) {
+            return Some(task);
+        }
+        // Try entry_point
+        self.tasks.values().find(|task| task.entry_point == name)
+    }
+
     pub fn len(&self) -> usize {
         self.tasks.len()
     }

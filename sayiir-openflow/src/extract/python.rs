@@ -9,23 +9,47 @@ pub fn extract_all_python_tasks(source: &str) -> Result<Vec<TaskSource>> {
     while i < lines.len() {
         let line = lines[i].trim();
 
-        // Look for @task decorator
-        if line == "@task" {
+        // Look for @task decorator (with or without arguments)
+        if line.starts_with("@task") {
+            let decorator_start = i;
             i += 1;
+
+            // Skip decorator arguments if multi-line (look for closing paren)
+            while i < lines.len() {
+                let current = lines[i].trim();
+                // If we hit a def, break
+                if current.starts_with("def ") {
+                    break;
+                }
+                // If line doesn't look like decorator continuation, break
+                if !current.is_empty() && !current.ends_with(',') && !current.ends_with('(') && !current.contains(')') {
+                    break;
+                }
+                i += 1;
+                // If we found closing paren, next should be def
+                if current.contains(')') {
+                    break;
+                }
+            }
+
             if i >= lines.len() {
                 break;
             }
 
-            // Next line should be: def function_name(...)
+            // Now we should be at the def line
             let def_line = lines[i].trim();
             if let Some(fn_name) = parse_function_name(def_line) {
                 // Extract function body (indent-aware)
                 let (fn_source, end_idx) = extract_python_function(&lines, i);
 
+                // Include all decorator lines
+                let decorator_lines: Vec<&str> = lines[decorator_start..i].iter().copied().collect();
+                let full_source = format!("{}\n{}", decorator_lines.join("\n"), fn_source);
+
                 tasks.push(TaskSource {
                     id: fn_name.clone(),
                     entry_point: fn_name,
-                    source_code: format!("@task\n{}", fn_source),
+                    source_code: full_source,
                 });
 
                 i = end_idx - 1; // -1 because we'll increment at the end of the loop

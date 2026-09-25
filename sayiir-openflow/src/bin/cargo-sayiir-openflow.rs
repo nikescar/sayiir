@@ -166,7 +166,7 @@ fn export_workflow(
     // 6. Match tasks to workflow
     let mut matched_tasks = Vec::new();
     for task_name in &task_names {
-        if let Some(task_src) = task_registry.get(task_name) {
+        if let Some(task_src) = task_registry.get_by_name(task_name) {
             println!("✓ Extracted {} ({} lines)", task_src.id, task_src.source_code.lines().count());
 
             matched_tasks.push(TaskMetadata {

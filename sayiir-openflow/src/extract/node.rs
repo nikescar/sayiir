@@ -5,7 +5,8 @@ use regex::Regex;
 pub fn extract_all_node_tasks(source: &str) -> Result<Vec<TaskSource>> {
     let mut tasks = Vec::new();
 
-    let pattern = r#"(?:const|let|var)\s+(\w+)\s*=\s*task\s*\(\s*["']([^"']+)["']\s*,\s*async"#;
+    // Match: const/let/var name = task("id", async? (args) => ... or (args): Type => ...
+    let pattern = r#"(?:const|let|var)\s+(\w+)\s*=\s*task\s*\(\s*["']([^"']+)["']\s*,"#;
     let re = Regex::new(pattern).unwrap();
 
     for cap in re.captures_iter(source) {
