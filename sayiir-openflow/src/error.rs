@@ -26,6 +26,19 @@ pub enum OpenFlowError {
     #[error("Compilation failed for {module_id}:\n{stderr}")]
     CompilationError { module_id: String, stderr: String },
 
+    /// Dependency installation errors
+    #[error("Dependency installation failed for {module_id} ({language}): {dependency}\n{stderr}")]
+    DependencyError {
+        /// Module ID
+        module_id: String,
+        /// Language
+        language: String,
+        /// Dependency name
+        dependency: String,
+        /// Error output
+        stderr: String,
+    },
+
     /// Execution errors
     #[error("Task execution failed: {0}")]
     ExecutionError(String),

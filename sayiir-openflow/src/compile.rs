@@ -180,9 +180,18 @@ async fn compile_node(
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(OpenFlowError::CompilationError {
+            // Extract first failing package from error if possible
+            let dependency = dependencies
+                .keys()
+                .next()
+                .map(|s| s.clone())
+                .unwrap_or_else(|| "unknown".to_string());
+
+            return Err(OpenFlowError::DependencyError {
                 module_id: module.id.clone(),
-                stderr: format!("npm install failed: {}", stderr),
+                language: "node".to_string(),
+                dependency,
+                stderr: stderr.to_string(),
             });
         }
     }
@@ -235,7 +244,7 @@ async fn compile_python(
     // Write requirements.txt if dependencies exist
     if !dependencies.is_empty() {
         let mut requirements = String::new();
-        for (pkg, version) in dependencies {
+        for (pkg, version) in &dependencies {
             if let Some(ver_str) = version.as_str() {
                 requirements.push_str(&format!("{}=={}\n", pkg, ver_str));
             }
@@ -273,9 +282,18 @@ async fn compile_python(
 
         if !pip_output.status.success() {
             let stderr = String::from_utf8_lossy(&pip_output.stderr);
-            return Err(OpenFlowError::CompilationError {
+            // Extract first failing package from error if possible
+            let dependency = dependencies
+                .keys()
+                .next()
+                .map(|s| s.clone())
+                .unwrap_or_else(|| "unknown".to_string());
+
+            return Err(OpenFlowError::DependencyError {
                 module_id: module.id.clone(),
-                stderr: format!("pip install failed: {}", stderr),
+                language: "python".to_string(),
+                dependency,
+                stderr: stderr.to_string(),
             });
         }
     }
@@ -331,4 +349,45 @@ fn get_cache_dir(workflow_id: &str, module_id: &str, language: &str) -> Result<P
         .join(".sayiir")
         .join("cache")
         .join(format!("{}_{}_{}", workflow_id, module_id, language)))
+}
+
+/// Cleanup cache directories older than the specified number of days
+///
+/// # Arguments
+/// * `cache_root` - Optional custom cache root directory. If None, uses default ~/.sayiir/cache
+/// * `days_threshold` - Remove caches older than this many days
+pub fn cleanup_stale_cache(cache_root: Option<PathBuf>, days_threshold: u64) -> Result<()> {
+    use std::time::{Duration, SystemTime};
+
+    let cache_dir = if let Some(root) = cache_root {
+        root
+    } else {
+        let home = dirs::home_dir().ok_or_else(|| {
+            OpenFlowError::InvalidWorkflow("cannot determine home directory".into())
+        })?;
+        home.join(".sayiir").join("cache")
+    };
+
+    if !cache_dir.exists() {
+        return Ok(());
+    }
+
+    let threshold = SystemTime::now() - Duration::from_secs(days_threshold * 24 * 3600);
+
+    for entry in std::fs::read_dir(&cache_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            let metadata = std::fs::metadata(&path)?;
+            if let Ok(modified) = metadata.modified() {
+                if modified < threshold {
+                    // Remove stale cache directory
+                    std::fs::remove_dir_all(&path)?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
