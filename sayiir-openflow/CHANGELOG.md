@@ -24,6 +24,16 @@
   - Documentation with examples for all three languages
   - 42 total tests passing
 
+- **Mermaid Embedded Code Support (Phase 3)** - Human-readable markdown format with embedded code
+  - Extended export_mermaid() to append code blocks with metadata comments
+  - Extended import_mermaid() to parse code blocks and extract metadata
+  - Metadata format: `%%% task_id (language)`, `%%% Entry: function_name`, `%%% Dependencies: {...}`
+  - Code blocks use standard markdown fence syntax (```rust, ```python, ```javascript)
+  - Round-trip tests verify export → import → export produces identical output
+  - Backward compatible (simple Mermaid flowcharts without code still work)
+  - Documentation and examples for Mermaid workflow format
+  - 48 total tests passing
+
 ### Dependencies
 - Added `which` for runtime detection
 - Added `dirs` for cache directory path

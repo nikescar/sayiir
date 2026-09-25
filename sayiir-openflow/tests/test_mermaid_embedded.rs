@@ -15,7 +15,9 @@ fn test_export_mermaid_with_embedded_code() {
                     path: "rust_task".to_string(),
                     language: Some("rust".to_string()),
                     entry_point: Some("run".to_string()),
-                    code: Some("fn run(input: Value) -> Result<Value, String> { Ok(input) }".to_string()),
+                    code: Some(
+                        "fn run(input: Value) -> Result<Value, String> { Ok(input) }".to_string(),
+                    ),
                     dependencies: Some(deps),
                 },
             }],
@@ -294,7 +296,9 @@ fn test_mermaid_multi_language_workflow() {
                         path: "process_data".to_string(),
                         language: Some("python".to_string()),
                         entry_point: Some("process".to_string()),
-                        code: Some("def process(input):\n    return {\"processed\": True}".to_string()),
+                        code: Some(
+                            "def process(input):\n    return {\"processed\": True}".to_string(),
+                        ),
                         dependencies: None,
                     },
                 },
