@@ -21,7 +21,10 @@
 #![warn(missing_docs)]
 
 mod error;
+mod runtime;
+
 pub use error::{OpenFlowError, Result};
+pub use runtime::check_runtimes;
 
 /// OpenFlow JSON specification (Windmill format)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -390,6 +393,53 @@ flowchart TD
         assert!(json.contains("\"language\": \"python\""));
         assert!(json.contains("\"entry_point\": \"run\""));
         assert!(json.contains("def run(input)"));
+    }
+
+    #[test]
+    fn test_runtime_detection() {
+        use crate::runtime::check_runtimes;
+
+        let spec = OpenFlowSpec {
+            summary: "Test".to_string(),
+            value: OpenFlowValue {
+                modules: vec![OpenFlowModule {
+                    id: "task1".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "task1".to_string(),
+                        language: Some("rust".to_string()),
+                        entry_point: Some("run".to_string()),
+                        code: Some("fn run() {}".to_string()),
+                    },
+                }],
+            },
+        };
+
+        // This test assumes cargo is installed (required to build sayiir-openflow itself)
+        let result = check_runtimes(&spec);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_runtime_detection_missing_runtime() {
+        use crate::runtime::check_runtimes;
+
+        let spec = OpenFlowSpec {
+            summary: "Test".to_string(),
+            value: OpenFlowValue {
+                modules: vec![OpenFlowModule {
+                    id: "task1".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "task1".to_string(),
+                        language: Some("nonexistent_language_xyz".to_string()),
+                        entry_point: Some("run".to_string()),
+                        code: Some("code".to_string()),
+                    },
+                }],
+            },
+        };
+
+        let result = check_runtimes(&spec);
+        assert!(result.is_err());
     }
 
     #[test]
