@@ -1,4 +1,4 @@
-use crate::{OpenFlowError, OpenFlowSpec, OpenFlowModuleValue, Result};
+use crate::{OpenFlowError, OpenFlowModuleValue, OpenFlowSpec, Result};
 use std::collections::HashSet;
 
 /// Check if required language runtimes are installed
@@ -6,7 +6,11 @@ pub fn check_runtimes(spec: &OpenFlowSpec) -> Result<()> {
     let mut required_runtimes = HashSet::new();
 
     for module in &spec.value.modules {
-        if let OpenFlowModuleValue::Script { language: Some(lang), .. } = &module.value {
+        if let OpenFlowModuleValue::Script {
+            language: Some(lang),
+            ..
+        } = &module.value
+        {
             required_runtimes.insert(lang.as_str());
         }
     }
@@ -23,9 +27,12 @@ fn check_runtime_installed(language: &str) -> Result<()> {
         "rust" => ("cargo", "https://rustup.rs"),
         "node" => ("node", "https://nodejs.org"),
         "python" => ("python3", "https://www.python.org"),
-        _ => return Err(OpenFlowError::Unsupported(
-            format!("Unknown language: {}", language)
-        )),
+        _ => {
+            return Err(OpenFlowError::Unsupported(format!(
+                "Unknown language: {}",
+                language
+            )));
+        }
     };
 
     if which::which(command).is_err() {

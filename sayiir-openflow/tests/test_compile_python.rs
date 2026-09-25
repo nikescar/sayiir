@@ -8,10 +8,13 @@ async fn test_compile_python_module() {
             path: "test_python_task".to_string(),
             language: Some("python".to_string()),
             entry_point: Some("run".to_string()),
-            code: Some(r#"
+            code: Some(
+                r#"
 def run(input_data):
     return {"result": "ok", "input": input_data}
-"#.to_string()),
+"#
+                .to_string(),
+            ),
         },
     };
 
@@ -33,17 +36,22 @@ async fn test_execute_python_task() {
             path: "echo_task".to_string(),
             language: Some("python".to_string()),
             entry_point: Some("run".to_string()),
-            code: Some(r#"
+            code: Some(
+                r#"
 def run(input_data):
     return {"result": "ok", "input": input_data}
-"#.to_string()),
+"#
+                .to_string(),
+            ),
         },
     };
 
     let cached = compile_module(&module, "test_workflow").await.unwrap();
 
     let input = serde_json::json!({"test": "data"});
-    let output = execute_task(&cached, "python", input.clone()).await.unwrap();
+    let output = execute_task(&cached, "python", input.clone())
+        .await
+        .unwrap();
 
     assert_eq!(output["result"], "ok");
     assert_eq!(output["input"], input);

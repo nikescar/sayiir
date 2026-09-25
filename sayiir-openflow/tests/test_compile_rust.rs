@@ -8,13 +8,16 @@ async fn test_compile_rust_module() {
             path: "test_task".to_string(),
             language: Some("rust".to_string()),
             entry_point: Some("run".to_string()),
-            code: Some(r#"
+            code: Some(
+                r#"
 use serde_json::Value;
 
 fn run(input: Value) -> Result<Value, String> {
     Ok(serde_json::json!({"result": "ok"}))
 }
-"#.to_string()),
+"#
+                .to_string(),
+            ),
         },
     };
 
@@ -58,13 +61,16 @@ async fn test_execute_rust_task() {
             path: "echo_task".to_string(),
             language: Some("rust".to_string()),
             entry_point: Some("run".to_string()),
-            code: Some(r#"
+            code: Some(
+                r#"
 use serde_json::Value;
 
 fn run(input: Value) -> Result<Value, String> {
     Ok(serde_json::json!({"result": "ok", "input": input}))
 }
-"#.to_string()),
+"#
+                .to_string(),
+            ),
         },
     };
 

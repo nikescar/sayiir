@@ -9,13 +9,16 @@ async fn test_execution_timeout() {
             path: "slow_task".to_string(),
             language: Some("python".to_string()),
             entry_point: Some("run".to_string()),
-            code: Some(r#"
+            code: Some(
+                r#"
 import time
 
 def run(input_data):
     time.sleep(5)  # Sleep longer than timeout
     return {"result": "ok"}
-"#.to_string()),
+"#
+                .to_string(),
+            ),
         },
     };
 

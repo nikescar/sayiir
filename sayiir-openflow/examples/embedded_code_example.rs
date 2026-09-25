@@ -13,7 +13,8 @@ async fn main() -> Result<()> {
                     path: "calculate_price".to_string(),
                     language: Some("rust".to_string()),
                     entry_point: Some("run".to_string()),
-                    code: Some(r#"
+                    code: Some(
+                        r#"
 use serde_json::{json, Value};
 
 fn run(input: Value) -> Result<Value, String> {
@@ -28,7 +29,9 @@ fn run(input: Value) -> Result<Value, String> {
         "total": total
     }))
 }
-"#.to_string()),
+"#
+                        .to_string(),
+                    ),
                 },
             }],
         },

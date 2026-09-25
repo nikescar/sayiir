@@ -24,10 +24,7 @@ pub enum OpenFlowError {
 
     /// Compilation errors
     #[error("Compilation failed for {module_id}:\n{stderr}")]
-    CompilationError {
-        module_id: String,
-        stderr: String,
-    },
+    CompilationError { module_id: String, stderr: String },
 
     /// Execution errors
     #[error("Task execution failed: {0}")]

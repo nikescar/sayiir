@@ -20,15 +20,15 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
-mod error;
-mod runtime;
 mod compile;
+mod error;
 mod execute;
+mod runtime;
 
+pub use compile::{CachedModule, compile_module};
 pub use error::{OpenFlowError, Result};
-pub use runtime::check_runtimes;
-pub use compile::{compile_module, CachedModule};
 pub use execute::{execute_task, execute_task_with_timeout};
+pub use runtime::check_runtimes;
 
 /// OpenFlow JSON specification (Windmill format)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -88,47 +88,60 @@ pub fn import_openflow_json(json: &str) -> Result<OpenFlowSpec> {
 
 fn validate_spec(spec: &OpenFlowSpec) -> Result<()> {
     if spec.summary.is_empty() {
-        return Err(OpenFlowError::InvalidWorkflow("summary cannot be empty".into()));
+        return Err(OpenFlowError::InvalidWorkflow(
+            "summary cannot be empty".into(),
+        ));
     }
 
     // Validate module IDs are unique
     let mut seen_ids = std::collections::HashSet::new();
     for module in &spec.value.modules {
         if !seen_ids.insert(&module.id) {
-            return Err(OpenFlowError::InvalidWorkflow(
-                format!("duplicate module ID: {}", module.id)
-            ));
+            return Err(OpenFlowError::InvalidWorkflow(format!(
+                "duplicate module ID: {}",
+                module.id
+            )));
         }
 
         // Validate embedded code fields (if present, all three must be present)
-        if let OpenFlowModuleValue::Script { language, entry_point, code, .. } = &module.value {
+        if let OpenFlowModuleValue::Script {
+            language,
+            entry_point,
+            code,
+            ..
+        } = &module.value
+        {
             let has_language = language.is_some();
             let has_entry_point = entry_point.is_some();
             let has_code = code.is_some();
 
             if has_language || has_entry_point || has_code {
                 if !has_language {
-                    return Err(OpenFlowError::InvalidWorkflow(
-                        format!("module '{}': language required when code is embedded", module.id)
-                    ));
+                    return Err(OpenFlowError::InvalidWorkflow(format!(
+                        "module '{}': language required when code is embedded",
+                        module.id
+                    )));
                 }
                 if !has_entry_point {
-                    return Err(OpenFlowError::InvalidWorkflow(
-                        format!("module '{}': entry_point required when code is embedded", module.id)
-                    ));
+                    return Err(OpenFlowError::InvalidWorkflow(format!(
+                        "module '{}': entry_point required when code is embedded",
+                        module.id
+                    )));
                 }
                 if !has_code {
-                    return Err(OpenFlowError::InvalidWorkflow(
-                        format!("module '{}': code required when language is specified", module.id)
-                    ));
+                    return Err(OpenFlowError::InvalidWorkflow(format!(
+                        "module '{}': code required when language is specified",
+                        module.id
+                    )));
                 }
 
                 // Validate language is supported
                 let lang = language.as_ref().unwrap();
                 if !matches!(lang.as_str(), "rust" | "node" | "python") {
-                    return Err(OpenFlowError::Unsupported(
-                        format!("language '{}' not supported (use rust, node, or python)", lang)
-                    ));
+                    return Err(OpenFlowError::Unsupported(format!(
+                        "language '{}' not supported (use rust, node, or python)",
+                        lang
+                    )));
                 }
             }
         }
@@ -260,17 +273,15 @@ mod tests {
         let spec = OpenFlowSpec {
             summary: "Test workflow".to_string(),
             value: OpenFlowValue {
-                modules: vec![
-                    OpenFlowModule {
-                        id: "task1".to_string(),
-                        value: OpenFlowModuleValue::Script {
-                            path: "test_script".to_string(),
-                            language: None,
-                            entry_point: None,
-                            code: None,
-                        },
+                modules: vec![OpenFlowModule {
+                    id: "task1".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "test_script".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
                     },
-                ],
+                }],
             },
         };
 
@@ -336,7 +347,12 @@ flowchart TD
         let json = r#"{"summary": "", "value": {"modules": []}}"#;
         let result = import_openflow_json(json);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("summary cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("summary cannot be empty")
+        );
     }
 
     #[test]
@@ -367,7 +383,13 @@ flowchart TD
         let spec = import_openflow_json(json).unwrap();
         let module = &spec.value.modules[0];
 
-        if let OpenFlowModuleValue::Script { language, entry_point, code, .. } = &module.value {
+        if let OpenFlowModuleValue::Script {
+            language,
+            entry_point,
+            code,
+            ..
+        } = &module.value
+        {
             assert_eq!(language.as_ref().unwrap(), "rust");
             assert_eq!(entry_point.as_ref().unwrap(), "run");
             assert!(code.as_ref().unwrap().contains("fn run"));
@@ -465,7 +487,12 @@ flowchart TD
         }"#;
         let result = import_openflow_json(json);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("language required"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("language required")
+        );
 
         // Unsupported language
         let json = r#"{
@@ -538,17 +565,15 @@ flowchart TD
         let spec = OpenFlowSpec {
             summary: "Single task".to_string(),
             value: OpenFlowValue {
-                modules: vec![
-                    OpenFlowModule {
-                        id: "only".to_string(),
-                        value: OpenFlowModuleValue::Script {
-                            path: "single".to_string(),
-                            language: None,
-                            entry_point: None,
-                            code: None,
-                        },
+                modules: vec![OpenFlowModule {
+                    id: "only".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "single".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
                     },
-                ],
+                }],
             },
         };
 
@@ -573,17 +598,15 @@ flowchart TD
         let spec = OpenFlowSpec {
             summary: "Test".to_string(),
             value: OpenFlowValue {
-                modules: vec![
-                    OpenFlowModule {
-                        id: "task1".to_string(),
-                        value: OpenFlowModuleValue::Script {
-                            path: "test".to_string(),
-                            language: None,
-                            entry_point: None,
-                            code: None,
-                        },
+                modules: vec![OpenFlowModule {
+                    id: "task1".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "test".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
                     },
-                ],
+                }],
             },
         };
 

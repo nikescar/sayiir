@@ -13,7 +13,8 @@ async fn test_end_to_end_rust_workflow() {
                     path: "add_numbers".to_string(),
                     language: Some("rust".to_string()),
                     entry_point: Some("run".to_string()),
-                    code: Some(r#"
+                    code: Some(
+                        r#"
 use serde_json::{json, Value};
 
 fn run(input: Value) -> Result<Value, String> {
@@ -21,7 +22,9 @@ fn run(input: Value) -> Result<Value, String> {
     let b = input["b"].as_i64().ok_or("missing b")?;
     Ok(json!({"result": a + b}))
 }
-"#.to_string()),
+"#
+                        .to_string(),
+                    ),
                 },
             }],
         },
@@ -65,12 +68,15 @@ async fn test_end_to_end_mixed_languages() {
                         path: "rust_task".to_string(),
                         language: Some("rust".to_string()),
                         entry_point: Some("run".to_string()),
-                        code: Some(r#"
+                        code: Some(
+                            r#"
 use serde_json::{json, Value};
 fn run(input: Value) -> Result<Value, String> {
     Ok(json!({"from_rust": true, "value": 1}))
 }
-"#.to_string()),
+"#
+                            .to_string(),
+                        ),
                     },
                 },
                 OpenFlowModule {
@@ -79,11 +85,14 @@ fn run(input: Value) -> Result<Value, String> {
                         path: "node_task".to_string(),
                         language: Some("node".to_string()),
                         entry_point: Some("run".to_string()),
-                        code: Some(r#"
+                        code: Some(
+                            r#"
 async function run(input) {
     return { from_node: true, value: 2 };
 }
-"#.to_string()),
+"#
+                            .to_string(),
+                        ),
                     },
                 },
                 OpenFlowModule {
@@ -92,10 +101,13 @@ async function run(input) {
                         path: "python_task".to_string(),
                         language: Some("python".to_string()),
                         entry_point: Some("run".to_string()),
-                        code: Some(r#"
+                        code: Some(
+                            r#"
 def run(input_data):
     return {"from_python": True, "value": 3}
-"#.to_string()),
+"#
+                            .to_string(),
+                        ),
                     },
                 },
             ],
@@ -108,7 +120,10 @@ def run(input_data):
 
     // Compile and execute all modules
     for module in &imported.value.modules {
-        let lang = if let OpenFlowModuleValue::Script { language: Some(l), .. } = &module.value {
+        let lang = if let OpenFlowModuleValue::Script {
+            language: Some(l), ..
+        } = &module.value
+        {
             l.clone()
         } else {
             continue;

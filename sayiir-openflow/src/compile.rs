@@ -13,10 +13,17 @@ pub struct CachedModule {
 
 /// Compile a module with embedded code
 pub async fn compile_module(module: &OpenFlowModule, workflow_id: &str) -> Result<CachedModule> {
-    let OpenFlowModuleValue::Script { language: Some(lang), code: Some(code), entry_point: Some(entry), .. } = &module.value else {
-        return Err(OpenFlowError::InvalidWorkflow(
-            format!("module '{}': missing language, code, or entry_point", module.id)
-        ));
+    let OpenFlowModuleValue::Script {
+        language: Some(lang),
+        code: Some(code),
+        entry_point: Some(entry),
+        ..
+    } = &module.value
+    else {
+        return Err(OpenFlowError::InvalidWorkflow(format!(
+            "module '{}': missing language, code, or entry_point",
+            module.id
+        )));
     };
 
     match lang.as_str() {
@@ -38,14 +45,17 @@ async fn compile_rust(
     std::fs::create_dir_all(&cache_dir)?;
 
     // Write Cargo.toml
-    let cargo_toml = format!(r#"[package]
+    let cargo_toml = format!(
+        r#"[package]
 name = "{}"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 serde_json = "1.0"
-"#, module.id);
+"#,
+        module.id
+    );
 
     std::fs::write(cache_dir.join("Cargo.toml"), cargo_toml)?;
 
@@ -54,7 +64,8 @@ serde_json = "1.0"
     std::fs::create_dir_all(&src_dir)?;
 
     // Write main.rs with wrapper
-    let main_rs = format!(r#"{code}
+    let main_rs = format!(
+        r#"{code}
 
 fn main() {{
     let args: Vec<String> = std::env::args().collect();
@@ -75,7 +86,8 @@ fn main() {{
         }}
     }}
 }}
-"#);
+"#
+    );
 
     std::fs::write(src_dir.join("main.rs"), main_rs)?;
 
@@ -121,7 +133,8 @@ async fn compile_node(
     std::fs::create_dir_all(&cache_dir)?;
 
     // Write task.js with wrapper
-    let task_js = format!(r#"{code}
+    let task_js = format!(
+        r#"{code}
 
 // Wrapper
 const input = JSON.parse(process.argv[2]);
@@ -135,7 +148,8 @@ Promise.resolve({entry_point}(input))
         console.error(err.message);
         process.exit(1);
     }});
-"#);
+"#
+    );
 
     let task_path = cache_dir.join("task.js");
     std::fs::write(&task_path, task_js)?;
@@ -157,7 +171,8 @@ async fn compile_python(
     std::fs::create_dir_all(&cache_dir)?;
 
     // Write task.py with wrapper
-    let task_py = format!(r#"#!/usr/bin/env python3
+    let task_py = format!(
+        r#"#!/usr/bin/env python3
 import json
 import sys
 
@@ -177,7 +192,8 @@ if __name__ == "__main__":
     except Exception as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)
-"#);
+"#
+    );
 
     let task_path = cache_dir.join("task.py");
     std::fs::write(&task_path, task_py)?;
@@ -198,9 +214,8 @@ if __name__ == "__main__":
 }
 
 fn get_cache_dir(workflow_id: &str, module_id: &str, language: &str) -> Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| {
-        OpenFlowError::InvalidWorkflow("cannot determine home directory".into())
-    })?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| OpenFlowError::InvalidWorkflow("cannot determine home directory".into()))?;
 
     Ok(home
         .join(".sayiir")
