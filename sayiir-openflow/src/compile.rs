@@ -147,13 +147,54 @@ Promise.resolve({entry_point}(input))
 }
 
 async fn compile_python(
-    _module: &OpenFlowModule,
-    _workflow_id: &str,
-    _code: &str,
-    _entry_point: &str,
+    module: &OpenFlowModule,
+    workflow_id: &str,
+    code: &str,
+    entry_point: &str,
 ) -> Result<CachedModule> {
-    // Placeholder for Task 6
-    Err(OpenFlowError::Unsupported("python compilation not implemented yet".into()))
+    // Create cache directory
+    let cache_dir = get_cache_dir(workflow_id, &module.id, "python")?;
+    std::fs::create_dir_all(&cache_dir)?;
+
+    // Write task.py with wrapper
+    let task_py = format!(r#"#!/usr/bin/env python3
+import json
+import sys
+
+{code}
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python task.py <json_input>", file=sys.stderr)
+        sys.exit(1)
+
+    input_data = json.loads(sys.argv[1])
+
+    try:
+        result = {entry_point}(input_data)
+        print(json.dumps(result))
+        sys.exit(0)
+    except Exception as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+"#);
+
+    let task_path = cache_dir.join("task.py");
+    std::fs::write(&task_path, task_py)?;
+
+    // Make executable on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&task_path)?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&task_path, perms)?;
+    }
+
+    Ok(CachedModule {
+        cache_path: cache_dir,
+        executable: task_path,
+    })
 }
 
 fn get_cache_dir(workflow_id: &str, module_id: &str, language: &str) -> Result<PathBuf> {
