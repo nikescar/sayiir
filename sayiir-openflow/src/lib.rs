@@ -75,6 +75,15 @@ pub enum OpenFlowModuleValue {
     Script {
         /// Script path/name
         path: String,
+        /// Language (rust, node, python) - optional for backward compatibility
+        #[serde(skip_serializing_if = "Option::is_none")]
+        language: Option<String>,
+        /// Entry point function name - optional for backward compatibility
+        #[serde(skip_serializing_if = "Option::is_none")]
+        entry_point: Option<String>,
+        /// Embedded source code - optional for backward compatibility
+        #[serde(skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
     },
 }
 
@@ -100,6 +109,39 @@ fn validate_spec(spec: &OpenFlowSpec) -> Result<()> {
             return Err(OpenFlowError::InvalidWorkflow(
                 format!("duplicate module ID: {}", module.id)
             ));
+        }
+
+        // Validate embedded code fields (if present, all three must be present)
+        if let OpenFlowModuleValue::Script { language, entry_point, code, .. } = &module.value {
+            let has_language = language.is_some();
+            let has_entry_point = entry_point.is_some();
+            let has_code = code.is_some();
+
+            if has_language || has_entry_point || has_code {
+                if !has_language {
+                    return Err(OpenFlowError::InvalidWorkflow(
+                        format!("module '{}': language required when code is embedded", module.id)
+                    ));
+                }
+                if !has_entry_point {
+                    return Err(OpenFlowError::InvalidWorkflow(
+                        format!("module '{}': entry_point required when code is embedded", module.id)
+                    ));
+                }
+                if !has_code {
+                    return Err(OpenFlowError::InvalidWorkflow(
+                        format!("module '{}': code required when language is specified", module.id)
+                    ));
+                }
+
+                // Validate language is supported
+                let lang = language.as_ref().unwrap();
+                if !matches!(lang.as_str(), "rust" | "node" | "python") {
+                    return Err(OpenFlowError::Unsupported(
+                        format!("language '{}' not supported (use rust, node, or python)", lang)
+                    ));
+                }
+            }
         }
     }
 
@@ -148,6 +190,9 @@ fn parse_mermaid_node(line: &str) -> Option<OpenFlowModule> {
                 id: id.to_string(),
                 value: OpenFlowModuleValue::Script {
                     path: id.to_string(),
+                    language: None,
+                    entry_point: None,
+                    code: None,
                 },
             });
         }
@@ -231,6 +276,9 @@ mod tests {
                         id: "task1".to_string(),
                         value: OpenFlowModuleValue::Script {
                             path: "test_script".to_string(),
+                            language: None,
+                            entry_point: None,
+                            code: None,
                         },
                     },
                 ],
@@ -265,11 +313,21 @@ flowchart TD
                 modules: vec![
                     OpenFlowModule {
                         id: "A".to_string(),
-                        value: OpenFlowModuleValue::Script { path: "a".to_string() },
+                        value: OpenFlowModuleValue::Script {
+                            path: "a".to_string(),
+                            language: None,
+                            entry_point: None,
+                            code: None,
+                        },
                     },
                     OpenFlowModule {
                         id: "B".to_string(),
-                        value: OpenFlowModuleValue::Script { path: "b".to_string() },
+                        value: OpenFlowModuleValue::Script {
+                            path: "b".to_string(),
+                            language: None,
+                            entry_point: None,
+                            code: None,
+                        },
                     },
                 ],
             },
@@ -297,6 +355,101 @@ flowchart TD
         let json = r#"{"summary": "Test", "value": {"modules": [}"#; // Missing closing bracket
         let result = import_openflow_json(json);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_import_module_with_embedded_code() {
+        let json = r#"{
+            "summary": "Test",
+            "value": {
+                "modules": [{
+                    "id": "task1",
+                    "value": {
+                        "type": "script",
+                        "path": "task1",
+                        "language": "rust",
+                        "entry_point": "run",
+                        "code": "fn run(input: serde_json::Value) -> Result<serde_json::Value, String> { Ok(input) }"
+                    }
+                }]
+            }
+        }"#;
+
+        let spec = import_openflow_json(json).unwrap();
+        let module = &spec.value.modules[0];
+
+        if let OpenFlowModuleValue::Script { language, entry_point, code, .. } = &module.value {
+            assert_eq!(language.as_ref().unwrap(), "rust");
+            assert_eq!(entry_point.as_ref().unwrap(), "run");
+            assert!(code.as_ref().unwrap().contains("fn run"));
+        } else {
+            panic!("Expected Script variant");
+        }
+    }
+
+    #[test]
+    fn test_export_module_with_embedded_code() {
+        let spec = OpenFlowSpec {
+            summary: "Test".to_string(),
+            value: OpenFlowValue {
+                modules: vec![OpenFlowModule {
+                    id: "task1".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "task1".to_string(),
+                        language: Some("python".to_string()),
+                        entry_point: Some("run".to_string()),
+                        code: Some("def run(input): return input".to_string()),
+                    },
+                }],
+            },
+        };
+
+        let json = export_openflow_json(&spec).unwrap();
+        assert!(json.contains("\"language\": \"python\""));
+        assert!(json.contains("\"entry_point\": \"run\""));
+        assert!(json.contains("def run(input)"));
+    }
+
+    #[test]
+    fn test_validation_embedded_code_requires_all_fields() {
+        // Missing language
+        let json = r#"{
+            "summary": "Test",
+            "value": {
+                "modules": [{
+                    "id": "task1",
+                    "value": {
+                        "type": "script",
+                        "path": "task1",
+                        "entry_point": "run",
+                        "code": "fn run() {}"
+                    }
+                }]
+            }
+        }"#;
+        let result = import_openflow_json(json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("language required"));
+
+        // Unsupported language
+        let json = r#"{
+            "summary": "Test",
+            "value": {
+                "modules": [{
+                    "id": "task1",
+                    "value": {
+                        "type": "script",
+                        "path": "task1",
+                        "language": "java",
+                        "entry_point": "run",
+                        "code": "public static void run() {}"
+                    }
+                }]
+            }
+        }"#;
+        let result = import_openflow_json(json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not supported"));
     }
 
     #[test]
@@ -352,7 +505,12 @@ flowchart TD
                 modules: vec![
                     OpenFlowModule {
                         id: "only".to_string(),
-                        value: OpenFlowModuleValue::Script { path: "single".to_string() },
+                        value: OpenFlowModuleValue::Script {
+                            path: "single".to_string(),
+                            language: None,
+                            entry_point: None,
+                            code: None,
+                        },
                     },
                 ],
             },
@@ -382,7 +540,12 @@ flowchart TD
                 modules: vec![
                     OpenFlowModule {
                         id: "task1".to_string(),
-                        value: OpenFlowModuleValue::Script { path: "test".to_string() },
+                        value: OpenFlowModuleValue::Script {
+                            path: "test".to_string(),
+                            language: None,
+                            entry_point: None,
+                            code: None,
+                        },
                     },
                 ],
             },
