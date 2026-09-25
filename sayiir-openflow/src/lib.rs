@@ -20,26 +20,8 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
-use thiserror::Error;
-
-/// OpenFlow import/export errors
-#[derive(Error, Debug)]
-pub enum OpenFlowError {
-    /// JSON parsing error
-    #[error("JSON parse error: {0}")]
-    JsonError(#[from] serde_json::Error),
-
-    /// Invalid workflow structure
-    #[error("Invalid workflow: {0}")]
-    InvalidWorkflow(String),
-
-    /// Unsupported feature
-    #[error("Unsupported: {0}")]
-    Unsupported(String),
-}
-
-/// Result type for OpenFlow operations
-pub type Result<T> = std::result::Result<T, OpenFlowError>;
+mod error;
+pub use error::{OpenFlowError, Result};
 
 /// OpenFlow JSON specification (Windmill format)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
