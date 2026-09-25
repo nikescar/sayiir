@@ -2,11 +2,28 @@
 
 Export Rust/Python/Node.js workflows to portable OpenFlow JSON and Mermaid markdown.
 
-## Build
+## Installation
 
+**Option 1: Install from source (recommended)**
+```bash
+cd sayiir-openflow
+cargo install --path . --bin cargo-sayiir-openflow
+```
+
+**Option 2: Manual build and copy**
 ```bash
 cargo build --release --bin cargo-sayiir-openflow
 cp target/release/cargo-sayiir-openflow ~/.cargo/bin/
+```
+
+**Option 3: Install from crates.io** (when published)
+```bash
+cargo install sayiir-openflow
+```
+
+After installation, verify with:
+```bash
+cargo sayiir-openflow --help
 ```
 
 ## CLI Usage
