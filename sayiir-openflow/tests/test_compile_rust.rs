@@ -49,3 +49,33 @@ async fn test_compile_rust_syntax_error() {
         panic!("Expected CompilationError");
     }
 }
+
+#[tokio::test]
+async fn test_execute_rust_task() {
+    let module = OpenFlowModule {
+        id: "echo_task".to_string(),
+        value: OpenFlowModuleValue::Script {
+            path: "echo_task".to_string(),
+            language: Some("rust".to_string()),
+            entry_point: Some("run".to_string()),
+            code: Some(r#"
+use serde_json::Value;
+
+fn run(input: Value) -> Result<Value, String> {
+    Ok(serde_json::json!({"result": "ok", "input": input}))
+}
+"#.to_string()),
+        },
+    };
+
+    let cached = compile_module(&module, "test_workflow").await.unwrap();
+
+    let input = serde_json::json!({"test": "data"});
+    let output = execute_task(&cached, "rust", input.clone()).await.unwrap();
+
+    assert_eq!(output["result"], "ok");
+    assert_eq!(output["input"], input);
+
+    // Cleanup
+    std::fs::remove_dir_all(cached.cache_path).ok();
+}

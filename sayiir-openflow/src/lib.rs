@@ -23,10 +23,12 @@
 mod error;
 mod runtime;
 mod compile;
+mod execute;
 
 pub use error::{OpenFlowError, Result};
 pub use runtime::check_runtimes;
 pub use compile::{compile_module, CachedModule};
+pub use execute::{execute_task, execute_task_with_timeout};
 
 /// OpenFlow JSON specification (Windmill format)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
