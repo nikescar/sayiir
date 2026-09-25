@@ -1,6 +1,7 @@
 use crate::{OpenFlowError, OpenFlowModule, OpenFlowModuleValue, Result};
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 /// Cached compiled module
 #[derive(Debug, Clone)]
@@ -9,6 +10,26 @@ pub struct CachedModule {
     pub cache_path: PathBuf,
     /// Path to executable (binary for Rust, script for Node.js/Python)
     pub executable: PathBuf,
+}
+
+/// Retry an async operation with exponential backoff
+async fn retry_with_backoff<F, Fut, T, E>(mut f: F, max_attempts: u32) -> std::result::Result<T, E>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = std::result::Result<T, E>>,
+{
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        match f().await {
+            Ok(result) => return Ok(result),
+            Err(e) if attempt >= max_attempts => return Err(e),
+            Err(_) => {
+                let backoff = Duration::from_secs(2u64.pow(attempt - 1));
+                tokio::time::sleep(backoff).await;
+            }
+        }
+    }
 }
 
 /// Compile a module with embedded code
@@ -170,30 +191,42 @@ async fn compile_node(
             serde_json::to_string_pretty(&package_json)?,
         )?;
 
-        // Run npm install
-        let output = tokio::process::Command::new("npm")
-            .arg("install")
-            .arg("--silent")
-            .current_dir(&cache_dir)
-            .output()
-            .await?;
+        // Run npm install with retry
+        let module_id = module.id.clone();
+        let cache_dir_clone = cache_dir.clone();
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // Extract first failing package from error if possible
-            let dependency = dependencies
-                .keys()
-                .next()
-                .map(|s| s.clone())
-                .unwrap_or_else(|| "unknown".to_string());
+        let result = retry_with_backoff(
+            || async {
+                let output = tokio::process::Command::new("npm")
+                    .arg("install")
+                    .arg("--silent")
+                    .current_dir(&cache_dir_clone)
+                    .output()
+                    .await?;
 
-            return Err(OpenFlowError::DependencyError {
-                module_id: module.id.clone(),
-                language: "node".to_string(),
-                dependency,
-                stderr: stderr.to_string(),
-            });
-        }
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    // Extract first failing package from error if possible
+                    let dependency = dependencies
+                        .keys()
+                        .next()
+                        .map(|s| s.clone())
+                        .unwrap_or_else(|| "unknown".to_string());
+
+                    return Err(OpenFlowError::DependencyError {
+                        module_id: module_id.clone(),
+                        language: "node".to_string(),
+                        dependency,
+                        stderr: stderr.to_string(),
+                    });
+                }
+                Ok(())
+            },
+            3,
+        )
+        .await;
+
+        result?;
     }
 
     // Write task.js with wrapper
@@ -269,33 +302,45 @@ async fn compile_python(
             });
         }
 
-        // Install dependencies using venv pip
+        // Install dependencies using venv pip with retry
         let pip_path = cache_dir.join("venv/bin/pip");
-        let pip_output = tokio::process::Command::new(pip_path)
-            .arg("install")
-            .arg("-q")
-            .arg("-r")
-            .arg("requirements.txt")
-            .current_dir(&cache_dir)
-            .output()
-            .await?;
+        let module_id = module.id.clone();
+        let cache_dir_clone = cache_dir.clone();
 
-        if !pip_output.status.success() {
-            let stderr = String::from_utf8_lossy(&pip_output.stderr);
-            // Extract first failing package from error if possible
-            let dependency = dependencies
-                .keys()
-                .next()
-                .map(|s| s.clone())
-                .unwrap_or_else(|| "unknown".to_string());
+        let result = retry_with_backoff(
+            || async {
+                let pip_output = tokio::process::Command::new(&pip_path)
+                    .arg("install")
+                    .arg("-q")
+                    .arg("-r")
+                    .arg("requirements.txt")
+                    .current_dir(&cache_dir_clone)
+                    .output()
+                    .await?;
 
-            return Err(OpenFlowError::DependencyError {
-                module_id: module.id.clone(),
-                language: "python".to_string(),
-                dependency,
-                stderr: stderr.to_string(),
-            });
-        }
+                if !pip_output.status.success() {
+                    let stderr = String::from_utf8_lossy(&pip_output.stderr);
+                    // Extract first failing package from error if possible
+                    let dependency = dependencies
+                        .keys()
+                        .next()
+                        .map(|s| s.clone())
+                        .unwrap_or_else(|| "unknown".to_string());
+
+                    return Err(OpenFlowError::DependencyError {
+                        module_id: module_id.clone(),
+                        language: "python".to_string(),
+                        dependency,
+                        stderr: stderr.to_string(),
+                    });
+                }
+                Ok(())
+            },
+            3,
+        )
+        .await;
+
+        result?;
     }
 
     // Write task.py with wrapper

@@ -184,6 +184,37 @@ See `examples/mermaid_example.rs` for a complete example.
 
 Compiled artifacts are cached in `~/.sayiir/cache/<workflow_id>_<module_id>_<language>/`.
 
+### Cache Cleanup
+
+Remove stale caches older than a threshold:
+
+```rust
+use sayiir_openflow::cleanup_stale_cache;
+
+// Remove caches older than 7 days
+cleanup_stale_cache(None, 7)?;
+
+// Custom cache directory
+let cache_root = PathBuf::from("/custom/cache");
+cleanup_stale_cache(Some(cache_root), 14)?;
+```
+
+### Error Handling
+
+Dependency installation automatically retries with exponential backoff (3 attempts: 1s, 2s, 4s) for network errors. Errors include structured context:
+
+```rust
+match compile_module(&module, "workflow_id").await {
+    Err(OpenFlowError::DependencyError { module_id, language, dependency, stderr }) => {
+        eprintln!("Failed to install {dependency} for {module_id} ({language}):\n{stderr}");
+    }
+    Err(OpenFlowError::CompilationError { module_id, stderr }) => {
+        eprintln!("Compilation failed for {module_id}:\n{stderr}");
+    }
+    Ok(cached) => println!("Compiled: {:?}", cached.executable),
+}
+```
+
 See `examples/embedded_code_example.rs` for a complete example.
 
 ## License
