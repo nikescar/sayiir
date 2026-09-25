@@ -122,12 +122,12 @@ fn extract_task_names(tokens: &str) -> Result<Vec<String>> {
     // Parse task names (handle identifiers and parallel syntax)
     let mut task_names = Vec::new();
     let mut current_token = String::new();
-    let mut in_parens = false;
 
     for ch in steps_content.chars() {
         match ch {
-            '(' => in_parens = true,
-            ')' => in_parens = false,
+            '(' | ')' => {
+                // Parentheses group parallel tasks but don't affect parsing
+            }
             ',' => {
                 if !current_token.trim().is_empty() {
                     task_names.push(current_token.trim().to_string());

@@ -24,6 +24,7 @@ pub mod builder;
 mod compile;
 pub mod detect;
 pub mod error;
+pub mod extract;
 mod execute;
 pub mod parse;
 mod runtime;
@@ -32,6 +33,7 @@ pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
 pub use detect::{detect_language, ProjectLanguage};
 pub use error::{ExportError, OpenFlowError, Result};
 pub use execute::{execute_task, execute_task_with_timeout};
+pub use extract::TaskSource;
 pub use runtime::check_runtimes;
 
 /// OpenFlow JSON specification (Windmill format)
