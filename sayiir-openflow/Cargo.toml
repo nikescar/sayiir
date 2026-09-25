@@ -16,6 +16,10 @@ documentation = "https://docs.rs/sayiir-openflow"
 name = "sayiir_openflow"
 path = "src/lib.rs"
 
+[[bin]]
+name = "cargo-sayiir-openflow"
+path = "src/bin/cargo-sayiir-openflow.rs"
+
 [dependencies]
 sayiir-core = { workspace = true }
 serde = { workspace = true }

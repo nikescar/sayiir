@@ -30,6 +30,7 @@ mod execute;
 pub mod parse;
 mod runtime;
 
+pub use builder::{build_openflow_spec, TaskMetadata, Language};
 pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
 pub use deps::{parse_cargo_deps, parse_python_deps, parse_node_deps};
 pub use detect::{detect_language, ProjectLanguage};
