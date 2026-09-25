@@ -53,6 +53,51 @@ fn extract_function_source(_source: &str, func: &syn::ItemFn) -> Result<String> 
     Ok(source_code)
 }
 
+pub fn extract_all_rust_tasks(source: &str) -> Result<Vec<TaskSource>> {
+    let ast: File = syn::parse_str(source)
+        .map_err(|e| ExportError::InvalidWorkflowSyntax(format!("Failed to parse Rust: {}", e)))?;
+
+    let mut tasks = Vec::new();
+
+    for item in &ast.items {
+        if let Item::Fn(func) = item {
+            if let Some(task_id) = get_task_id(&func.attrs, &func.sig.ident) {
+                let entry_point = func.sig.ident.to_string();
+                let source_code = func.to_token_stream().to_string();
+
+                tasks.push(TaskSource {
+                    id: task_id,
+                    source_code,
+                    entry_point,
+                });
+            }
+        }
+    }
+
+    Ok(tasks)
+}
+
+fn get_task_id(attrs: &[Attribute], fn_ident: &syn::Ident) -> Option<String> {
+    for attr in attrs {
+        if attr.path().is_ident("task") {
+            // If #[task(id = "explicit_id")], use explicit_id
+            if let Ok(list) = attr.meta.require_list() {
+                let tokens = list.tokens.to_string();
+                // Simple extraction: look for id = "value"
+                if let Some(start) = tokens.find(r#"id = ""#) {
+                    let after = &tokens[start + 6..];
+                    if let Some(end) = after.find('"') {
+                        return Some(after[..end].to_string());
+                    }
+                }
+            }
+            // If just #[task], infer from function name
+            return Some(fn_ident.to_string());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +113,30 @@ fn my_task() {}
             assert!(has_task_attribute(&func.attrs, "test_task"));
             assert!(!has_task_attribute(&func.attrs, "other_task"));
         }
+    }
+
+    #[test]
+    fn test_extract_all_rust_tasks() {
+        let source = r#"
+#[task(id = "task1")]
+fn first_task() {}
+
+#[task(id = "task2")]
+async fn second_task(input: String) -> Result<String, BoxError> {
+    Ok(input)
+}
+
+#[task]
+fn third_task() {}
+
+fn not_a_task() {}
+"#;
+
+        let tasks = extract_all_rust_tasks(source).unwrap();
+
+        assert_eq!(tasks.len(), 3);
+        assert_eq!(tasks[0].id, "task1");
+        assert_eq!(tasks[1].id, "task2");
+        assert_eq!(tasks[2].id, "third_task"); // Inferred from function name
     }
 }
