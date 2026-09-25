@@ -41,6 +41,7 @@ let spec = OpenFlowSpec {
                 language: Some("rust".to_string()),
                 entry_point: Some("run".to_string()),
                 code: Some("fn run(input: Value) -> Result<Value, String> { Ok(input) }".to_string()),
+                dependencies: None,
             },
         }],
     },
@@ -88,6 +89,50 @@ async function run(input) { return {...}; }
 ```python
 def run(input_data): return {...}
 ```
+
+### External Dependencies
+
+Tasks can declare external dependencies using the `dependencies` field:
+
+**Rust dependencies** (Cargo.toml format):
+```rust
+let mut deps = serde_json::Map::new();
+deps.insert("chrono".to_string(), json!("0.4"));
+
+OpenFlowModuleValue::Script {
+    // ... other fields
+    dependencies: Some(deps),
+}
+```
+
+**Node.js dependencies** (package.json format):
+```rust
+let mut deps = serde_json::Map::new();
+deps.insert("axios".to_string(), json!("^1.6.0"));
+
+OpenFlowModuleValue::Script {
+    // ... other fields
+    dependencies: Some(deps),
+}
+```
+
+**Python dependencies** (requirements.txt format):
+```rust
+let mut deps = serde_json::Map::new();
+deps.insert("requests".to_string(), json!("2.31.0"));
+
+OpenFlowModuleValue::Script {
+    // ... other fields
+    dependencies: Some(deps),
+}
+```
+
+Dependencies are automatically installed during compilation:
+- **Rust**: Generates `Cargo.toml` and runs `cargo build --release`
+- **Node.js**: Generates `package.json` and runs `npm install`
+- **Python**: Generates `requirements.txt`, creates `venv`, and runs `pip install`
+
+See `examples/dependencies_example.rs` for a complete example.
 
 ### Cache Location
 
