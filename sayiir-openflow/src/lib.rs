@@ -30,8 +30,6 @@ pub use error::{OpenFlowError, Result};
 pub use execute::{execute_task, execute_task_with_timeout};
 pub use runtime::check_runtimes;
 
-use std::collections::HashMap;
-
 /// OpenFlow JSON specification (Windmill format)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFlowSpec {
@@ -151,29 +149,21 @@ fn preview_spec(spec: &OpenFlowSpec) -> ImportPreview {
         .modules
         .iter()
         .map(|module| {
-            let (language, entry_point, code_lines, dependencies_count) =
-                if let OpenFlowModuleValue::Script {
-                    language,
-                    entry_point,
-                    code,
-                    dependencies,
-                    ..
-                } = &module.value
-                {
-                    let lines = code.as_ref().map(|c| c.lines().count());
-                    let deps_count = dependencies
-                        .as_ref()
-                        .map(|d| d.len())
-                        .unwrap_or(0);
-                    (language.clone(), entry_point.clone(), lines, deps_count)
-                } else {
-                    (None, None, None, 0)
-                };
+            let OpenFlowModuleValue::Script {
+                language,
+                entry_point,
+                code,
+                dependencies,
+                ..
+            } = &module.value;
+
+            let code_lines = code.as_ref().map(|c| c.lines().count());
+            let dependencies_count = dependencies.as_ref().map(|d| d.len()).unwrap_or(0);
 
             ModulePreview {
                 id: module.id.clone(),
-                language,
-                entry_point,
+                language: language.clone(),
+                entry_point: entry_point.clone(),
                 code_lines,
                 dependencies_count,
             }
@@ -215,45 +205,44 @@ fn validate_spec(spec: &OpenFlowSpec) -> Result<()> {
         }
 
         // Validate embedded code fields (if present, all three must be present)
-        if let OpenFlowModuleValue::Script {
+        let OpenFlowModuleValue::Script {
             language,
             entry_point,
             code,
             ..
-        } = &module.value
-        {
-            let has_language = language.is_some();
-            let has_entry_point = entry_point.is_some();
-            let has_code = code.is_some();
+        } = &module.value;
 
-            if has_language || has_entry_point || has_code {
-                if !has_language {
-                    return Err(OpenFlowError::InvalidWorkflow(format!(
-                        "module '{}': language required when code is embedded",
-                        module.id
-                    )));
-                }
-                if !has_entry_point {
-                    return Err(OpenFlowError::InvalidWorkflow(format!(
-                        "module '{}': entry_point required when code is embedded",
-                        module.id
-                    )));
-                }
-                if !has_code {
-                    return Err(OpenFlowError::InvalidWorkflow(format!(
-                        "module '{}': code required when language is specified",
-                        module.id
-                    )));
-                }
+        let has_language = language.is_some();
+        let has_entry_point = entry_point.is_some();
+        let has_code = code.is_some();
 
-                // Validate language is supported
-                let lang = language.as_ref().unwrap();
-                if !matches!(lang.as_str(), "rust" | "node" | "python") {
-                    return Err(OpenFlowError::Unsupported(format!(
-                        "language '{}' not supported (use rust, node, or python)",
-                        lang
-                    )));
-                }
+        if has_language || has_entry_point || has_code {
+            if !has_language {
+                return Err(OpenFlowError::InvalidWorkflow(format!(
+                    "module '{}': language required when code is embedded",
+                    module.id
+                )));
+            }
+            if !has_entry_point {
+                return Err(OpenFlowError::InvalidWorkflow(format!(
+                    "module '{}': entry_point required when code is embedded",
+                    module.id
+                )));
+            }
+            if !has_code {
+                return Err(OpenFlowError::InvalidWorkflow(format!(
+                    "module '{}': code required when language is specified",
+                    module.id
+                )));
+            }
+
+            // Validate language is supported
+            let lang = language.as_ref().unwrap();
+            if !matches!(lang.as_str(), "rust" | "node" | "python") {
+                return Err(OpenFlowError::Unsupported(format!(
+                    "language '{}' not supported (use rust, node, or python)",
+                    lang
+                )));
             }
         }
     }

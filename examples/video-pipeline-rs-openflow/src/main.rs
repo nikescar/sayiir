@@ -21,84 +21,140 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     id: "download_video".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::download_video".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "validate_upload".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::validate_upload".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "transcode_720p".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::transcode_720p".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "transcode_1080p".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::transcode_1080p".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "transcode_4k".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::transcode_4k".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "generate_thumbnails".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::generate_thumbnails".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "moderate_content".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::moderate_content".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "merge_results".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::merge_results".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "check_moderation".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::check_moderation".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "upload_to_cdn".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::upload_to_cdn".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "update_database".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::update_database".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "notify_user".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::notify_user".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "cleanup_artifacts".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::cleanup_artifacts".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
                 OpenFlowModule {
                     id: "notify_rejection".to_string(),
                     value: OpenFlowModuleValue::Script {
                         path: "tasks::notify_rejection".to_string(),
+                        language: None,
+                        entry_point: None,
+                        code: None,
+                        dependencies: None,
                     },
                 },
             ],

@@ -1,3 +1,5 @@
+#![allow(irrefutable_let_patterns)]
+
 use crate::{OpenFlowError, OpenFlowModule, OpenFlowModuleValue, Result};
 use std::path::PathBuf;
 use std::process::Command;

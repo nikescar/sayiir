@@ -18,13 +18,20 @@ pub enum OpenFlowError {
     /// Missing runtime
     #[error("Runtime not found: {language}. Install from: {install_url}")]
     MissingRuntime {
+        /// Language runtime that is missing
         language: String,
+        /// URL to installation instructions
         install_url: String,
     },
 
     /// Compilation errors
     #[error("Compilation failed for {module_id}:\n{stderr}")]
-    CompilationError { module_id: String, stderr: String },
+    CompilationError {
+        /// Module ID
+        module_id: String,
+        /// Compiler error output
+        stderr: String,
+    },
 
     /// Dependency installation errors
     #[error("Dependency installation failed for {module_id} ({language}): {dependency}\n{stderr}")]
@@ -45,7 +52,10 @@ pub enum OpenFlowError {
 
     /// Timeout
     #[error("Task timeout after {seconds}s")]
-    Timeout { seconds: u64 },
+    Timeout {
+        /// Timeout duration in seconds
+        seconds: u64,
+    },
 
     /// IO errors
     #[error("IO error: {0}")]
