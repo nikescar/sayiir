@@ -26,25 +26,34 @@ pub async fn execute_task_with_timeout(
 ) -> Result<Value> {
     let input_json = serde_json::to_string(&input)?;
 
-    let (command, args) = match language {
+    let (command, args): (String, Vec<String>) = match language {
         "rust" => (
-            cached.executable.to_str().unwrap(),
+            cached.executable.to_str().unwrap().to_string(),
             vec![input_json.clone()],
         ),
         "node" => (
-            "node",
+            "node".to_string(),
             vec![
                 cached.executable.to_str().unwrap().to_string(),
                 input_json.clone(),
             ],
         ),
-        "python" => (
-            "python3",
-            vec![
-                cached.executable.to_str().unwrap().to_string(),
-                input_json.clone(),
-            ],
-        ),
+        "python" => {
+            // Use venv python if it exists
+            let venv_python = cached.cache_path.join("venv/bin/python3");
+            let python_cmd = if venv_python.exists() {
+                venv_python.to_str().unwrap().to_string()
+            } else {
+                "python3".to_string()
+            };
+            (
+                python_cmd,
+                vec![
+                    cached.executable.to_str().unwrap().to_string(),
+                    input_json.clone(),
+                ],
+            )
+        }
         _ => {
             return Err(OpenFlowError::Unsupported(format!(
                 "language: {}",
@@ -56,7 +65,7 @@ pub async fn execute_task_with_timeout(
     // Spawn process
     let output = tokio::time::timeout(
         timeout,
-        tokio::process::Command::new(command).args(&args).output(),
+        tokio::process::Command::new(&command).args(&args).output(),
     )
     .await
     .map_err(|_| OpenFlowError::Timeout {

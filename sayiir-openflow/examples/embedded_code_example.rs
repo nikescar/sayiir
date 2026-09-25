@@ -32,6 +32,7 @@ fn run(input: Value) -> Result<Value, String> {
 "#
                         .to_string(),
                     ),
+                    dependencies: None,
                 },
             }],
         },

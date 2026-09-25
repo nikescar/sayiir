@@ -25,6 +25,7 @@ fn run(input: Value) -> Result<Value, String> {
 "#
                         .to_string(),
                     ),
+                               dependencies: None,
                 },
             }],
         },
@@ -77,6 +78,7 @@ fn run(input: Value) -> Result<Value, String> {
 "#
                             .to_string(),
                         ),
+                               dependencies: None,
                     },
                 },
                 OpenFlowModule {
@@ -93,6 +95,7 @@ async function run(input) {
 "#
                             .to_string(),
                         ),
+                               dependencies: None,
                     },
                 },
                 OpenFlowModule {
@@ -108,6 +111,7 @@ def run(input_data):
 "#
                             .to_string(),
                         ),
+                               dependencies: None,
                     },
                 },
             ],

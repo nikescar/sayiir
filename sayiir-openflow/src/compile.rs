@@ -225,6 +225,61 @@ async fn compile_python(
     let cache_dir = get_cache_dir(workflow_id, &module.id, "python")?;
     std::fs::create_dir_all(&cache_dir)?;
 
+    // Extract dependencies
+    let dependencies = if let OpenFlowModuleValue::Script { dependencies, .. } = &module.value {
+        dependencies.clone().unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+
+    // Write requirements.txt if dependencies exist
+    if !dependencies.is_empty() {
+        let mut requirements = String::new();
+        for (pkg, version) in dependencies {
+            if let Some(ver_str) = version.as_str() {
+                requirements.push_str(&format!("{}=={}\n", pkg, ver_str));
+            }
+        }
+
+        std::fs::write(cache_dir.join("requirements.txt"), requirements)?;
+
+        // Create virtual environment
+        let venv_output = tokio::process::Command::new("python3")
+            .arg("-m")
+            .arg("venv")
+            .arg("venv")
+            .current_dir(&cache_dir)
+            .output()
+            .await?;
+
+        if !venv_output.status.success() {
+            let stderr = String::from_utf8_lossy(&venv_output.stderr);
+            return Err(OpenFlowError::CompilationError {
+                module_id: module.id.clone(),
+                stderr: format!("venv creation failed: {}", stderr),
+            });
+        }
+
+        // Install dependencies using venv pip
+        let pip_path = cache_dir.join("venv/bin/pip");
+        let pip_output = tokio::process::Command::new(pip_path)
+            .arg("install")
+            .arg("-q")
+            .arg("-r")
+            .arg("requirements.txt")
+            .current_dir(&cache_dir)
+            .output()
+            .await?;
+
+        if !pip_output.status.success() {
+            let stderr = String::from_utf8_lossy(&pip_output.stderr);
+            return Err(OpenFlowError::CompilationError {
+                module_id: module.id.clone(),
+                stderr: format!("pip install failed: {}", stderr),
+            });
+        }
+    }
+
     // Write task.py with wrapper
     let task_py = format!(
         r#"#!/usr/bin/env python3

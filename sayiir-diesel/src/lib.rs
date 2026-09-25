@@ -23,17 +23,17 @@
 
 use thiserror::Error;
 
-#[allow(missing_docs)]
-mod schema;
 mod backend;
 mod models;
+#[allow(missing_docs)]
+mod schema;
 
 #[cfg(test)]
 mod tests;
 
-pub use schema::*;
 pub use backend::DieselBackend;
 pub use models::*;
+pub use schema::*;
 
 /// Diesel backend errors
 #[derive(Error, Debug)]

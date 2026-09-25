@@ -16,6 +16,7 @@ async function run(input) {
 "#
                 .to_string(),
             ),
+            dependencies: None,
         },
     };
 
@@ -45,6 +46,7 @@ async function run(input) {
 "#
                 .to_string(),
             ),
+            dependencies: None,
         },
     };
 

@@ -15,6 +15,7 @@ def run(input_data):
 "#
                 .to_string(),
             ),
+            dependencies: None,
         },
     };
 
@@ -43,6 +44,7 @@ def run(input_data):
 "#
                 .to_string(),
             ),
+            dependencies: None,
         },
     };
 

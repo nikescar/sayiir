@@ -18,6 +18,7 @@ fn run(input: Value) -> Result<Value, String> {
 "#
                 .to_string(),
             ),
+            dependencies: None,
         },
     };
 
@@ -40,6 +41,7 @@ async fn test_compile_rust_syntax_error() {
             language: Some("rust".to_string()),
             entry_point: Some("run".to_string()),
             code: Some("fn run( { invalid syntax }".to_string()),
+            dependencies: None,
         },
     };
 
@@ -71,6 +73,7 @@ fn run(input: Value) -> Result<Value, String> {
 "#
                 .to_string(),
             ),
+            dependencies: None,
         },
     };
 

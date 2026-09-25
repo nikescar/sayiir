@@ -1,11 +1,12 @@
-use diesel_async::pooled_connection::deadpool::Pool;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use sayiir_persistence::{BackendError, SnapshotStore, SignalStore};
-use sayiir_core::snapshot::{WorkflowSnapshot, SignalKind, SignalRequest};
 use bytes::Bytes;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::deadpool::Pool;
+use sayiir_core::snapshot::{SignalKind, SignalRequest, WorkflowSnapshot};
+use sayiir_persistence::{BackendError, SignalStore, SnapshotStore};
 
 #[cfg(feature = "sqlite")]
-type Connection = diesel_async::sync_connection_wrapper::SyncConnectionWrapper<diesel::SqliteConnection>;
+type Connection =
+    diesel_async::sync_connection_wrapper::SyncConnectionWrapper<diesel::SqliteConnection>;
 
 #[cfg(feature = "postgres")]
 type Connection = diesel_async::AsyncPgConnection;
@@ -40,47 +41,130 @@ async fn create_pool(database_url: &str) -> Result<Pool<Connection>> {
 async fn run_migrations(pool: &Pool<Connection>) -> Result<()> {
     use diesel_async::RunQueryDsl;
 
-    let mut conn = pool.get().await
+    let mut conn = pool
+        .get()
+        .await
         .map_err(|e| DieselError::MigrationError(format!("pool error: {}", e)))?;
 
     // List of migrations to run in order
     #[cfg(feature = "postgres")]
     let migrations = vec![
-        ("000001_initial", include_str!("../migrations/postgres/2026-09-25-000001_initial/up.sql")),
-        ("000002_observability", include_str!("../migrations/postgres/2026-09-25-000002_observability/up.sql")),
-        ("000004_trace_context", include_str!("../migrations/postgres/2026-09-25-000004_trace_context/up.sql")),
-        ("000005_history_unique_version", include_str!("../migrations/postgres/2026-09-25-000005_history_unique_version/up.sql")),
-        ("000006_task_priority", include_str!("../migrations/postgres/2026-09-25-000006_task_priority/up.sql")),
-        ("000007_task_tags", include_str!("../migrations/postgres/2026-09-25-000007_task_tags/up.sql")),
-        ("000008_performance_optim", include_str!("../migrations/postgres/2026-09-25-000008_performance_optim/up.sql")),
-        ("000009_index_cleanup", include_str!("../migrations/postgres/2026-09-25-000009_index_cleanup/up.sql")),
-        ("000010_dispatch_indexes", include_str!("../migrations/postgres/2026-09-25-000010_dispatch_indexes/up.sql")),
+        (
+            "000001_initial",
+            include_str!("../migrations/postgres/2026-09-25-000001_initial/up.sql"),
+        ),
+        (
+            "000002_observability",
+            include_str!("../migrations/postgres/2026-09-25-000002_observability/up.sql"),
+        ),
+        (
+            "000004_trace_context",
+            include_str!("../migrations/postgres/2026-09-25-000004_trace_context/up.sql"),
+        ),
+        (
+            "000005_history_unique_version",
+            include_str!("../migrations/postgres/2026-09-25-000005_history_unique_version/up.sql"),
+        ),
+        (
+            "000006_task_priority",
+            include_str!("../migrations/postgres/2026-09-25-000006_task_priority/up.sql"),
+        ),
+        (
+            "000007_task_tags",
+            include_str!("../migrations/postgres/2026-09-25-000007_task_tags/up.sql"),
+        ),
+        (
+            "000008_performance_optim",
+            include_str!("../migrations/postgres/2026-09-25-000008_performance_optim/up.sql"),
+        ),
+        (
+            "000009_index_cleanup",
+            include_str!("../migrations/postgres/2026-09-25-000009_index_cleanup/up.sql"),
+        ),
+        (
+            "000010_dispatch_indexes",
+            include_str!("../migrations/postgres/2026-09-25-000010_dispatch_indexes/up.sql"),
+        ),
     ];
 
     #[cfg(feature = "sqlite")]
     let migrations = vec![
-        ("000001_initial", include_str!("../migrations/sqlite/2026-09-25-000001_initial/up.sql")),
-        ("000002_observability", include_str!("../migrations/sqlite/2026-09-25-000002_observability/up.sql")),
-        ("000004_trace_context", include_str!("../migrations/sqlite/2026-09-25-000004_trace_context/up.sql")),
-        ("000005_history_unique_version", include_str!("../migrations/sqlite/2026-09-25-000005_history_unique_version/up.sql")),
-        ("000006_task_priority", include_str!("../migrations/sqlite/2026-09-25-000006_task_priority/up.sql")),
-        ("000007_task_tags", include_str!("../migrations/sqlite/2026-09-25-000007_task_tags/up.sql")),
-        ("000008_performance_optim", include_str!("../migrations/sqlite/2026-09-25-000008_performance_optim/up.sql")),
-        ("000009_index_cleanup", include_str!("../migrations/sqlite/2026-09-25-000009_index_cleanup/up.sql")),
-        ("000010_dispatch_indexes", include_str!("../migrations/sqlite/2026-09-25-000010_dispatch_indexes/up.sql")),
+        (
+            "000001_initial",
+            include_str!("../migrations/sqlite/2026-09-25-000001_initial/up.sql"),
+        ),
+        (
+            "000002_observability",
+            include_str!("../migrations/sqlite/2026-09-25-000002_observability/up.sql"),
+        ),
+        (
+            "000004_trace_context",
+            include_str!("../migrations/sqlite/2026-09-25-000004_trace_context/up.sql"),
+        ),
+        (
+            "000005_history_unique_version",
+            include_str!("../migrations/sqlite/2026-09-25-000005_history_unique_version/up.sql"),
+        ),
+        (
+            "000006_task_priority",
+            include_str!("../migrations/sqlite/2026-09-25-000006_task_priority/up.sql"),
+        ),
+        (
+            "000007_task_tags",
+            include_str!("../migrations/sqlite/2026-09-25-000007_task_tags/up.sql"),
+        ),
+        (
+            "000008_performance_optim",
+            include_str!("../migrations/sqlite/2026-09-25-000008_performance_optim/up.sql"),
+        ),
+        (
+            "000009_index_cleanup",
+            include_str!("../migrations/sqlite/2026-09-25-000009_index_cleanup/up.sql"),
+        ),
+        (
+            "000010_dispatch_indexes",
+            include_str!("../migrations/sqlite/2026-09-25-000010_dispatch_indexes/up.sql"),
+        ),
     ];
 
     #[cfg(feature = "mysql")]
     let migrations = vec![
-        ("000001_initial", include_str!("../migrations/mysql/2026-09-25-000001_initial/up.sql")),
-        ("000002_observability", include_str!("../migrations/mysql/2026-09-25-000002_observability/up.sql")),
-        ("000004_trace_context", include_str!("../migrations/mysql/2026-09-25-000004_trace_context/up.sql")),
-        ("000005_history_unique_version", include_str!("../migrations/mysql/2026-09-25-000005_history_unique_version/up.sql")),
-        ("000006_task_priority", include_str!("../migrations/mysql/2026-09-25-000006_task_priority/up.sql")),
-        ("000007_task_tags", include_str!("../migrations/mysql/2026-09-25-000007_task_tags/up.sql")),
-        ("000008_performance_optim", include_str!("../migrations/mysql/2026-09-25-000008_performance_optim/up.sql")),
-        ("000009_index_cleanup", include_str!("../migrations/mysql/2026-09-25-000009_index_cleanup/up.sql")),
-        ("000010_dispatch_indexes", include_str!("../migrations/mysql/2026-09-25-000010_dispatch_indexes/up.sql")),
+        (
+            "000001_initial",
+            include_str!("../migrations/mysql/2026-09-25-000001_initial/up.sql"),
+        ),
+        (
+            "000002_observability",
+            include_str!("../migrations/mysql/2026-09-25-000002_observability/up.sql"),
+        ),
+        (
+            "000004_trace_context",
+            include_str!("../migrations/mysql/2026-09-25-000004_trace_context/up.sql"),
+        ),
+        (
+            "000005_history_unique_version",
+            include_str!("../migrations/mysql/2026-09-25-000005_history_unique_version/up.sql"),
+        ),
+        (
+            "000006_task_priority",
+            include_str!("../migrations/mysql/2026-09-25-000006_task_priority/up.sql"),
+        ),
+        (
+            "000007_task_tags",
+            include_str!("../migrations/mysql/2026-09-25-000007_task_tags/up.sql"),
+        ),
+        (
+            "000008_performance_optim",
+            include_str!("../migrations/mysql/2026-09-25-000008_performance_optim/up.sql"),
+        ),
+        (
+            "000009_index_cleanup",
+            include_str!("../migrations/mysql/2026-09-25-000009_index_cleanup/up.sql"),
+        ),
+        (
+            "000010_dispatch_indexes",
+            include_str!("../migrations/mysql/2026-09-25-000010_dispatch_indexes/up.sql"),
+        ),
     ];
 
     // Run each migration
@@ -98,7 +182,9 @@ async fn run_migrations(pool: &Pool<Connection>) -> Result<()> {
             diesel::sql_query(stmt)
                 .execute(&mut conn)
                 .await
-                .map_err(|e| DieselError::MigrationError(format!("migration {} failed: {}", name, e)))?;
+                .map_err(|e| {
+                    DieselError::MigrationError(format!("migration {} failed: {}", name, e))
+                })?;
         }
     }
 
@@ -136,15 +222,21 @@ fn parse_sql_statements(sql: &str) -> Vec<String> {
 
 // SnapshotStore implementation
 impl SnapshotStore for DieselBackend {
-    async fn save_snapshot(&self, snapshot: &mut WorkflowSnapshot) -> std::result::Result<(), BackendError> {
+    async fn save_snapshot(
+        &self,
+        snapshot: &mut WorkflowSnapshot,
+    ) -> std::result::Result<(), BackendError> {
+        use crate::schema::sayiir_workflow_snapshots::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_snapshots::dsl::*;
 
-        let data_bytes = serde_json::to_vec(snapshot)
-            .map_err(|e| BackendError::Serialization(e.to_string()))?;
+        let data_bytes =
+            serde_json::to_vec(snapshot).map_err(|e| BackendError::Serialization(e.to_string()))?;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         let inst_id: &str = &snapshot.instance_id;
@@ -199,12 +291,18 @@ impl SnapshotStore for DieselBackend {
         self.save_snapshot(&mut snapshot).await
     }
 
-    async fn load_snapshot(&self, inst_id: &str) -> std::result::Result<WorkflowSnapshot, BackendError> {
+    async fn load_snapshot(
+        &self,
+        inst_id: &str,
+    ) -> std::result::Result<WorkflowSnapshot, BackendError> {
+        use crate::schema::sayiir_workflow_snapshots::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_snapshots::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         let row: crate::models::WorkflowSnapshot = sayiir_workflow_snapshots
@@ -223,11 +321,14 @@ impl SnapshotStore for DieselBackend {
     }
 
     async fn delete_snapshot(&self, inst_id: &str) -> std::result::Result<(), BackendError> {
+        use crate::schema::sayiir_workflow_snapshots::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_snapshots::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         diesel::delete(sayiir_workflow_snapshots.filter(instance_id.eq(inst_id)))
@@ -239,11 +340,14 @@ impl SnapshotStore for DieselBackend {
     }
 
     async fn list_snapshots(&self) -> std::result::Result<Vec<String>, BackendError> {
+        use crate::schema::sayiir_workflow_snapshots::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_snapshots::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         let ids: Vec<String> = sayiir_workflow_snapshots
@@ -264,11 +368,14 @@ impl SignalStore for DieselBackend {
         signal_kind: SignalKind,
         request: SignalRequest,
     ) -> std::result::Result<(), BackendError> {
+        use crate::schema::sayiir_workflow_signals::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_signals::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         let kind_str = match signal_kind {
@@ -301,11 +408,14 @@ impl SignalStore for DieselBackend {
         inst_id: &str,
         signal_kind: SignalKind,
     ) -> std::result::Result<Option<SignalRequest>, BackendError> {
+        use crate::schema::sayiir_workflow_signals::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_signals::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         let kind_str = match signal_kind {
@@ -340,11 +450,14 @@ impl SignalStore for DieselBackend {
         inst_id: &str,
         signal_kind: SignalKind,
     ) -> std::result::Result<(), BackendError> {
+        use crate::schema::sayiir_workflow_signals::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_signals::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         let kind_str = match signal_kind {
@@ -353,7 +466,7 @@ impl SignalStore for DieselBackend {
         };
 
         diesel::delete(
-            sayiir_workflow_signals.filter(instance_id.eq(inst_id).and(kind.eq(kind_str)))
+            sayiir_workflow_signals.filter(instance_id.eq(inst_id).and(kind.eq(kind_str))),
         )
         .execute(&mut conn)
         .await
@@ -368,11 +481,14 @@ impl SignalStore for DieselBackend {
         sig_name: &str,
         event_payload: Bytes,
     ) -> std::result::Result<(), BackendError> {
+        use crate::schema::sayiir_workflow_events::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_events::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         diesel::insert_into(sayiir_workflow_events)
@@ -393,11 +509,14 @@ impl SignalStore for DieselBackend {
         inst_id: &str,
         sig_name: &str,
     ) -> std::result::Result<Option<Bytes>, BackendError> {
+        use crate::schema::sayiir_workflow_events::dsl::*;
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
-        use crate::schema::sayiir_workflow_events::dsl::*;
 
-        let mut conn = self.pool.get().await
+        let mut conn = self
+            .pool
+            .get()
+            .await
             .map_err(|e| BackendError::Backend(format!("pool error: {}", e)))?;
 
         // Find oldest event for this (instance_id, signal_name) pair
@@ -414,7 +533,9 @@ impl SignalStore for DieselBackend {
             diesel::delete(sayiir_workflow_events.filter(id.eq(evt.id)))
                 .execute(&mut conn)
                 .await
-                .map_err(|e| BackendError::Backend(format!("consume_event delete failed: {}", e)))?;
+                .map_err(|e| {
+                    BackendError::Backend(format!("consume_event delete failed: {}", e))
+                })?;
 
             Ok(Some(Bytes::from(evt.payload)))
         } else {
