@@ -134,6 +134,52 @@ Dependencies are automatically installed during compilation:
 
 See `examples/dependencies_example.rs` for a complete example.
 
+### Mermaid Markdown Format
+
+Workflows can be exported to and imported from Mermaid markdown with embedded code blocks:
+
+**Export to Mermaid:**
+```rust
+let spec = OpenFlowSpec { /* ... */ };
+let mermaid = export_mermaid(&spec)?;
+std::fs::write("workflow.mmd", mermaid)?;
+```
+
+**Mermaid Format:**
+```mermaid
+flowchart TD
+    task1[Rust Task]
+    task2[Python Task]
+    task1 --> task2
+
+%%% task1 (rust)
+%%% Entry: run
+%%% Dependencies: {"chrono":"0.4"}
+```rust
+fn run(input: Value) -> Result<Value, String> {
+    // code here
+}
+```
+
+%%% task2 (python)
+%%% Entry: main
+%%% Dependencies: {}
+```python
+def main(input):
+    return input
+```
+```
+
+**Import from Mermaid:**
+```rust
+let mermaid = std::fs::read_to_string("workflow.mmd")?;
+let spec = import_mermaid(&mermaid)?;
+```
+
+Mermaid format is human-readable and can be embedded in documentation. Code blocks are preserved during round-trip export → import → export.
+
+See `examples/mermaid_example.rs` for a complete example.
+
 ### Cache Location
 
 Compiled artifacts are cached in `~/.sayiir/cache/<workflow_id>_<module_id>_<language>/`.
