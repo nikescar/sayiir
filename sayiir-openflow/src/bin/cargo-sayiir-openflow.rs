@@ -69,12 +69,14 @@ fn main() -> error::ExportResult<()> {
 }
 
 fn export_workflow(
-    input: Option<PathBuf>,
+    _input: Option<PathBuf>,
     format: Format,
     output: PathBuf,
     mermaid_output: PathBuf,
     dry_run: bool,
 ) -> error::ExportResult<()> {
+    use sayiir_openflow::extract::TaskRegistry;
+
     // 1. Detect language
     let project_dir = std::env::current_dir().map_err(|e| error::ExportError::FileReadError {
         path: PathBuf::from("."),
@@ -84,73 +86,107 @@ fn export_workflow(
     let language = detect_language(&project_dir)?;
     println!("✓ Detected {:?} project", language);
 
-    // 2. Determine input file
-    let workflow_file = input.unwrap_or_else(|| match language {
-        ProjectLanguage::Rust => PathBuf::from("src/main.rs"),
-        ProjectLanguage::Python => PathBuf::from("main.py"),
-        ProjectLanguage::Node => PathBuf::from("index.ts"),
-    });
+    // 2. Scan project files
+    let project_scan = sayiir_openflow::scan::scan_project(&project_dir, language)?;
+    println!("✓ Scanned {} files", project_scan.task_files.len());
 
-    // 3. Parse workflow (Rust only for now)
-    let source = std::fs::read_to_string(&workflow_file).map_err(|e| {
+    // 3. Build task registry
+    let mut task_registry = TaskRegistry::new();
+    let lang_enum = match language {
+        ProjectLanguage::Rust => Language::Rust,
+        ProjectLanguage::Python => Language::Python,
+        ProjectLanguage::Node => Language::Node,
+    };
+
+    for file_path in &project_scan.task_files {
+        let source = std::fs::read_to_string(file_path).map_err(|e| {
+            error::ExportError::FileReadError {
+                path: file_path.clone(),
+                source: e,
+            }
+        })?;
+
+        let tasks = match language {
+            ProjectLanguage::Rust => sayiir_openflow::extract::rust::extract_all_rust_tasks(&source)?,
+            ProjectLanguage::Python => sayiir_openflow::extract::python::extract_all_python_tasks(&source)?,
+            ProjectLanguage::Node => sayiir_openflow::extract::node::extract_all_node_tasks(&source)?,
+        };
+
+        for task in tasks {
+            task_registry.insert(task);
+        }
+    }
+
+    println!("✓ Found {} tasks", task_registry.len());
+
+    // 4. Parse workflow
+    let workflow_source = std::fs::read_to_string(&project_scan.workflow_file).map_err(|e| {
         error::ExportError::FileReadError {
-            path: workflow_file.clone(),
+            path: project_scan.workflow_file.clone(),
             source: e,
         }
     })?;
 
     let (workflow_name, task_names) = match language {
         ProjectLanguage::Rust => {
-            let workflow = parse::rust::parse_rust_workflow(&source)?;
-            (workflow.name, workflow.task_names)
+            let wf = parse::rust::parse_rust_workflow(&workflow_source)?;
+            (wf.name, wf.task_names)
         }
-        _ => {
-            eprintln!("⚠ Python and Node.js support not yet implemented");
-            return Err(error::ExportError::NoWorkflowFound);
+        ProjectLanguage::Python => {
+            let wf = sayiir_openflow::parse::python::parse_python_workflow(&workflow_source)?;
+            (wf.name, wf.task_names)
+        }
+        ProjectLanguage::Node => {
+            let wf = sayiir_openflow::parse::node::parse_node_workflow(&workflow_source)?;
+            (wf.name, wf.task_names)
         }
     };
 
     println!("✓ Found workflow: {}", workflow_name);
 
-    // 4. Extract tasks
-    let mut tasks = Vec::new();
-    for task_name in &task_names {
-        match extract::rust::extract_rust_task(&source, task_name) {
-            Ok(task_src) => {
-                let line_count = task_src.source_code.lines().count();
-                println!("✓ Extracted {} ({} lines)", task_src.id, line_count);
+    // 5. Parse dependencies
+    let deps = match language {
+        ProjectLanguage::Rust => parse_cargo_deps(&project_dir).unwrap_or_else(|e| {
+            eprintln!("⚠ Failed to parse dependencies: {}", e);
+            eprintln!("  → Exporting without dependency info");
+            HashMap::new()
+        }),
+        ProjectLanguage::Python => parse_python_deps(&project_dir).unwrap_or_else(|e| {
+            eprintln!("⚠ Failed to parse dependencies: {}", e);
+            eprintln!("  → Exporting without dependency info");
+            HashMap::new()
+        }),
+        ProjectLanguage::Node => parse_node_deps(&project_dir).unwrap_or_else(|e| {
+            eprintln!("⚠ Failed to parse dependencies: {}", e);
+            eprintln!("  → Exporting without dependency info");
+            HashMap::new()
+        }),
+    };
 
-                tasks.push(TaskMetadata {
-                    id: task_src.id,
-                    language: Language::Rust,
-                    source_code: task_src.source_code,
-                    entry_point: task_src.entry_point,
-                    dependencies: HashMap::new(), // Will add deps next
-                });
-            }
-            Err(e) => {
-                eprintln!("⚠ Task '{}' not found: {}", task_name, e);
-                eprintln!("  → Exporting task name only (workflow not portable)");
-            }
+    // 6. Match tasks to workflow
+    let mut matched_tasks = Vec::new();
+    for task_name in &task_names {
+        if let Some(task_src) = task_registry.get(task_name) {
+            println!("✓ Extracted {} ({} lines)", task_src.id, task_src.source_code.lines().count());
+
+            matched_tasks.push(TaskMetadata {
+                id: task_src.id.clone(),
+                language: lang_enum,
+                source_code: task_src.source_code.clone(),
+                entry_point: task_src.entry_point.clone(),
+                dependencies: deps.clone(),
+            });
+        } else {
+            eprintln!("⚠ Task '{}' not found: Task '{}' not found", task_name, task_name);
+            eprintln!("  → Check task definition exists");
+            eprintln!("  → Exporting task name only (workflow not portable)");
         }
     }
 
-    // 5. Parse dependencies
-    let deps = parse_cargo_deps(&project_dir).unwrap_or_else(|e| {
-        eprintln!("⚠ Failed to parse dependencies: {}", e);
-        eprintln!("  → Exporting without dependency info");
-        HashMap::new()
-    });
+    // 7. Build OpenFlowSpec
+    let spec = build_openflow_spec(workflow_name, matched_tasks);
 
-    // Merge deps into all tasks
-    for task in &mut tasks {
-        task.dependencies = deps.clone();
-    }
-
-    // 6. Build OpenFlowSpec
-    let spec = build_openflow_spec(workflow_name, tasks);
-
-    // 7. Export
+    // 8. Export
     if matches!(format, Format::Json | Format::Both) {
         let json = serde_json::to_string_pretty(&spec)
             .map_err(|e| error::ExportError::InvalidWorkflowSyntax(format!("Failed to serialize JSON: {}", e)))?;
@@ -167,7 +203,6 @@ fn export_workflow(
     }
 
     if matches!(format, Format::Mermaid | Format::Both) {
-        // TODO: Implement Mermaid export in Task 8
         let mermaid = generate_mermaid_stub(&spec);
         if !dry_run {
             std::fs::write(&mermaid_output, &mermaid).map_err(|e| {
@@ -199,6 +234,10 @@ fn generate_mermaid_stub(spec: &OpenFlowSpec) -> String {
             mermaid.push_str(&format!("    Task{} --> Task{}\n", i - 1, i));
         }
     }
-    mermaid.push_str(&format!("    Task{} --> End[Done]\n", spec.value.modules.len() - 1));
+    if !spec.value.modules.is_empty() {
+        mermaid.push_str(&format!("    Task{} --> End[Done]\n", spec.value.modules.len() - 1));
+    } else {
+        mermaid.push_str("    Start --> End[Done]\n");
+    }
     mermaid
 }

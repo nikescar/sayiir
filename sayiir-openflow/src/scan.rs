@@ -104,18 +104,29 @@ fn scan_node_project(project_dir: &Path) -> ExportResult<ProjectScan> {
 
     node_files.sort();
 
-    // Workflow file priority: src/index.ts, index.ts, src/main.ts, main.ts, first file
-    let workflow_file = [
-        src_dir.join("index.ts"),
-        project_dir.join("index.ts"),
-        src_dir.join("main.ts"),
-        project_dir.join("main.ts"),
-    ]
-    .iter()
-    .find(|p| p.exists())
-    .cloned()
-    .or_else(|| node_files.first().cloned())
-    .ok_or_else(|| ExportError::NoWorkflowFound)?;
+    // Workflow file priority: src/workflow*.ts, src/index.ts, index.ts, src/main.ts, main.ts, first file
+    let workflow_file = node_files
+        .iter()
+        .find(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.starts_with("workflow") && (s.ends_with(".ts") || s.ends_with(".js")))
+                .unwrap_or(false)
+        })
+        .cloned()
+        .or_else(|| {
+            [
+                src_dir.join("index.ts"),
+                project_dir.join("index.ts"),
+                src_dir.join("main.ts"),
+                project_dir.join("main.ts"),
+            ]
+            .iter()
+            .find(|p| p.exists())
+            .cloned()
+        })
+        .or_else(|| node_files.first().cloned())
+        .ok_or_else(|| ExportError::NoWorkflowFound)?;
 
     Ok(ProjectScan {
         workflow_file,
