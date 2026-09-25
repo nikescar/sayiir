@@ -17,6 +17,7 @@ resolver = "2"
 exclude = [
     "examples/hello-world-rs",
     "examples/video-pipeline-rs",
+    "hello-world-sqlite-rs",
     "benchmarks",
 ]
 
