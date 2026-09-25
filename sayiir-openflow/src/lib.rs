@@ -29,6 +29,7 @@ pub mod extract;
 mod execute;
 pub mod parse;
 mod runtime;
+pub mod scan;
 
 pub use builder::{build_openflow_spec, TaskMetadata, Language};
 pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
