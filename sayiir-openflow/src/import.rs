@@ -201,7 +201,10 @@ fn generate_rust_cargo_toml(
     deps: &HashMap<String, serde_json::Value>,
 ) -> String {
     let mut cargo_toml = format!(
-        r#"[package]
+        r#"[workspace]
+# Prevent cargo from detecting parent workspace
+
+[package]
 name = "workflow"
 version = "0.1.0"
 edition = "2021"
