@@ -30,6 +30,8 @@ pub use error::{OpenFlowError, Result};
 pub use execute::{execute_task, execute_task_with_timeout};
 pub use runtime::check_runtimes;
 
+use std::collections::HashMap;
+
 /// OpenFlow JSON specification (Windmill format)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFlowSpec {
@@ -77,6 +79,112 @@ pub enum OpenFlowModuleValue {
         #[serde(skip_serializing_if = "Option::is_none")]
         dependencies: Option<serde_json::Map<String, serde_json::Value>>,
     },
+}
+
+/// Import preview summary
+#[derive(Debug, Clone)]
+pub struct ImportPreview {
+    /// Workflow summary
+    pub summary: String,
+    /// Total modules count
+    pub total_modules: usize,
+    /// Module details
+    pub modules: Vec<ModulePreview>,
+}
+
+/// Module preview details
+#[derive(Debug, Clone)]
+pub struct ModulePreview {
+    /// Module ID
+    pub id: String,
+    /// Language (if embedded code)
+    pub language: Option<String>,
+    /// Entry point (if embedded code)
+    pub entry_point: Option<String>,
+    /// Code size in lines (if embedded code)
+    pub code_lines: Option<usize>,
+    /// Dependencies count (if embedded code with dependencies)
+    pub dependencies_count: usize,
+}
+
+impl std::fmt::Display for ImportPreview {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow: {}", self.summary)?;
+        writeln!(f, "Modules: {}", self.total_modules)?;
+        writeln!(f)?;
+        for module in &self.modules {
+            write!(f, "  - {}", module.id)?;
+            if let Some(lang) = &module.language {
+                write!(f, " ({})", lang)?;
+                if let Some(lines) = module.code_lines {
+                    write!(f, " - {} lines", lines)?;
+                }
+                if module.dependencies_count > 0 {
+                    write!(f, " - {} deps", module.dependencies_count)?;
+                }
+            }
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
+
+/// Preview import from OpenFlow JSON
+///
+/// Shows a summary of what would be imported without actually parsing embedded code.
+pub fn preview_import_json(json: &str) -> Result<ImportPreview> {
+    let spec: OpenFlowSpec = serde_json::from_str(json)?;
+    Ok(preview_spec(&spec))
+}
+
+/// Preview import from Mermaid markdown
+///
+/// Shows a summary of what would be imported without actually parsing embedded code.
+pub fn preview_import_mermaid(markdown: &str) -> Result<ImportPreview> {
+    let spec = import_mermaid(markdown)?;
+    Ok(preview_spec(&spec))
+}
+
+fn preview_spec(spec: &OpenFlowSpec) -> ImportPreview {
+    let modules: Vec<ModulePreview> = spec
+        .value
+        .modules
+        .iter()
+        .map(|module| {
+            let (language, entry_point, code_lines, dependencies_count) =
+                if let OpenFlowModuleValue::Script {
+                    language,
+                    entry_point,
+                    code,
+                    dependencies,
+                    ..
+                } = &module.value
+                {
+                    let lines = code.as_ref().map(|c| c.lines().count());
+                    let deps_count = dependencies
+                        .as_ref()
+                        .map(|d| d.len())
+                        .unwrap_or(0);
+                    (language.clone(), entry_point.clone(), lines, deps_count)
+                } else {
+                    (None, None, None, 0)
+                };
+
+            ModulePreview {
+                id: module.id.clone(),
+                language,
+                entry_point,
+                code_lines,
+                dependencies_count,
+            }
+        })
+        .collect();
+
+    ImportPreview {
+        summary: spec.summary.clone(),
+        total_modules: modules.len(),
+        modules,
+    }
 }
 
 /// Import OpenFlow JSON to Sayiir workflow

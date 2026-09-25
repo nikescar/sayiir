@@ -38,10 +38,13 @@
   - Enhanced error types with structured DependencyError (module_id, language, dependency, stderr)
   - Automatic retry with exponential backoff (3 attempts, 1s/2s/4s) for npm/pip network errors
   - Cache cleanup utility: `cleanup_stale_cache()` removes caches older than threshold (default 7 days)
+  - Import preview: `preview_import_json()` and `preview_import_mermaid()` show summary before importing
+  - Preview displays: module count, code sizes, languages, entry points, dependencies count
   - Improved error display with detailed context for compilation and dependency failures
   - Comprehensive error handling tests (compilation, dependency, missing runtime, retry behavior)
   - Cache cleanup tests with platform-independent filetime crate
-  - 54 total tests passing
+  - Import preview tests with Display trait implementation
+  - 57 total tests passing
 
 ### Dependencies
 - Added `which` for runtime detection

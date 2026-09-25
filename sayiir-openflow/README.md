@@ -176,6 +176,21 @@ let mermaid = std::fs::read_to_string("workflow.mmd")?;
 let spec = import_mermaid(&mermaid)?;
 ```
 
+**Preview before importing:**
+```rust
+// Preview JSON import
+let preview = preview_import_json(&json)?;
+println!("{}", preview);  // Displays summary, modules, code sizes, dependencies
+
+// Preview Mermaid import
+let preview = preview_import_mermaid(&mermaid)?;
+for module in &preview.modules {
+    if let Some(lines) = module.code_lines {
+        println!("{}: {} lines", module.id, lines);
+    }
+}
+```
+
 Mermaid format is human-readable and can be embedded in documentation. Code blocks are preserved during round-trip export → import → export.
 
 See `examples/mermaid_example.rs` for a complete example.
