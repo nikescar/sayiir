@@ -210,6 +210,7 @@ fn parse_mermaid_node(line: &str) -> Option<OpenFlowModule> {
 pub fn export_mermaid(spec: &OpenFlowSpec) -> Result<String> {
     let mut mermaid = String::from("flowchart TD\n");
 
+    // Generate flowchart nodes
     for module in &spec.value.modules {
         mermaid.push_str(&format!("    {}[{}]\n", module.id, module.id));
     }
@@ -219,6 +220,40 @@ pub fn export_mermaid(spec: &OpenFlowSpec) -> Result<String> {
         let current = &spec.value.modules[i];
         let next = &spec.value.modules[i + 1];
         mermaid.push_str(&format!("    {} --> {}\n", current.id, next.id));
+    }
+
+    // Append code blocks for modules with embedded code
+    for module in &spec.value.modules {
+        if let OpenFlowModuleValue::Script {
+            language: Some(lang),
+            entry_point: Some(entry),
+            code: Some(code),
+            dependencies,
+            ..
+        } = &module.value
+        {
+            mermaid.push_str("\n");
+
+            // Metadata comments
+            mermaid.push_str(&format!("%%% {} ({})\n", module.id, lang));
+            mermaid.push_str(&format!("%%% Entry: {}\n", entry));
+
+            // Dependencies as JSON
+            let deps_json = if let Some(deps) = dependencies {
+                serde_json::to_string(deps)?
+            } else {
+                "{}".to_string()
+            };
+            mermaid.push_str(&format!("%%% Dependencies: {}\n", deps_json));
+
+            // Code block with language tag
+            mermaid.push_str(&format!("```{}\n", lang));
+            mermaid.push_str(code);
+            if !code.ends_with('\n') {
+                mermaid.push('\n');
+            }
+            mermaid.push_str("```\n");
+        }
     }
 
     Ok(mermaid)
@@ -284,8 +319,8 @@ mod tests {
                         language: None,
                         entry_point: None,
                         code: None,
-                    dependencies: None,
-                },
+                        dependencies: None,
+                    },
                 }],
             },
         };
@@ -323,8 +358,8 @@ flowchart TD
                             language: None,
                             entry_point: None,
                             code: None,
-                    dependencies: None,
-                },
+                            dependencies: None,
+                        },
                     },
                     OpenFlowModule {
                         id: "B".to_string(),
@@ -333,8 +368,8 @@ flowchart TD
                             language: None,
                             entry_point: None,
                             code: None,
-                    dependencies: None,
-                },
+                            dependencies: None,
+                        },
                     },
                 ],
             },
@@ -417,7 +452,7 @@ flowchart TD
                         language: Some("python".to_string()),
                         entry_point: Some("run".to_string()),
                         code: Some("def run(input): return input".to_string()),
-                                   dependencies: None,
+                        dependencies: None,
                     },
                 }],
             },
@@ -443,7 +478,7 @@ flowchart TD
                         language: Some("rust".to_string()),
                         entry_point: Some("run".to_string()),
                         code: Some("fn run() {}".to_string()),
-                                   dependencies: None,
+                        dependencies: None,
                     },
                 }],
             },
@@ -468,7 +503,7 @@ flowchart TD
                         language: Some("nonexistent_language_xyz".to_string()),
                         entry_point: Some("run".to_string()),
                         code: Some("code".to_string()),
-                                   dependencies: None,
+                        dependencies: None,
                     },
                 }],
             },
@@ -582,8 +617,8 @@ flowchart TD
                         language: None,
                         entry_point: None,
                         code: None,
-                    dependencies: None,
-                },
+                        dependencies: None,
+                    },
                 }],
             },
         };
@@ -616,8 +651,8 @@ flowchart TD
                         language: None,
                         entry_point: None,
                         code: None,
-                    dependencies: None,
-                },
+                        dependencies: None,
+                    },
                 }],
             },
         };
