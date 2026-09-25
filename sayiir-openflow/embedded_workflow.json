@@ -1,0 +1,27 @@
+{
+  "summary": "Embedded code export example",
+  "value": {
+    "modules": [
+      {
+        "id": "calculate_tax",
+        "value": {
+          "type": "script",
+          "path": "calculate_tax",
+          "language": "rust",
+          "entry_point": "run",
+          "code": "use serde_json::{json, Value};\n\nfn run(input: Value) -> Result<Value, String> {\n    let price = input[\"price\"].as_f64().ok_or(\"missing price\")?;\n    let rate = input[\"tax_rate\"].as_f64().unwrap_or(0.08);\n    Ok(json!({\"total\": price * (1.0 + rate)}))\n}"
+        }
+      },
+      {
+        "id": "format_output",
+        "value": {
+          "type": "script",
+          "path": "format_output",
+          "language": "python",
+          "entry_point": "run",
+          "code": "def run(input_data):\n    total = input_data['total']\n    return {\"formatted\": f\"Total: ${total:.2f}\"}"
+        }
+      }
+    ]
+  }
+}

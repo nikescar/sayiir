@@ -1,0 +1,26 @@
+flowchart TD
+    calculate_tax[calculate_tax]
+    format_output[format_output]
+    calculate_tax --> format_output
+
+%%% calculate_tax (rust)
+%%% Entry: run
+%%% Dependencies: {}
+```rust
+use serde_json::{json, Value};
+
+fn run(input: Value) -> Result<Value, String> {
+    let price = input["price"].as_f64().ok_or("missing price")?;
+    let rate = input["tax_rate"].as_f64().unwrap_or(0.08);
+    Ok(json!({"total": price * (1.0 + rate)}))
+}
+```
+
+%%% format_output (python)
+%%% Entry: run
+%%% Dependencies: {}
+```python
+def run(input_data):
+    total = input_data['total']
+    return {"formatted": f"Total: ${total:.2f}"}
+```

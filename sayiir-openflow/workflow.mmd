@@ -1,0 +1,28 @@
+flowchart TD
+    timestamp_task[timestamp_task]
+    format_task[format_task]
+    timestamp_task --> format_task
+
+%%% timestamp_task (rust)
+%%% Entry: run
+%%% Dependencies: {"chrono":"0.4"}
+```rust
+use serde_json::{json, Value};
+use chrono::Utc;
+
+fn run(_input: Value) -> Result<Value, String> {
+    let now = Utc::now();
+    Ok(json!({"timestamp": now.to_rfc3339()}))
+}
+```
+
+%%% format_task (python)
+%%% Entry: run
+%%% Dependencies: {}
+```python
+def run(input_data):
+    return {
+        "message": f"Timestamp: {input_data['timestamp']}",
+        "formatted": True
+    }
+```
