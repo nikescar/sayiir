@@ -64,3 +64,38 @@ pub enum OpenFlowError {
 
 /// Result type for OpenFlow operations
 pub type Result<T> = std::result::Result<T, OpenFlowError>;
+
+// ─── Export-specific errors ─────────────────────────────────────────────────
+
+use std::path::PathBuf;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExportError {
+    #[error("No workflow project detected\n → Expected Cargo.toml, package.json, or requirements.txt")]
+    NoProjectDetected,
+
+    #[error("Task '{task_id}' not found\n → Check task definition exists")]
+    TaskNotFound { task_id: String },
+
+    #[error("No workflow definition found\n → Expected workflow! macro (Rust), Flow().build() (Python/Node)")]
+    NoWorkflowFound,
+
+    #[error("Invalid workflow syntax: {0}")]
+    InvalidWorkflowSyntax(String),
+
+    #[error("Failed to read file {path}: {source}")]
+    FileReadError {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to write file {path}: {source}")]
+    FileWriteError {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+pub type ExportResult<T> = std::result::Result<T, ExportError>;

@@ -22,12 +22,14 @@
 
 pub mod builder;
 mod compile;
-mod error;
+pub mod detect;
+pub mod error;
 mod execute;
 mod runtime;
 
 pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
-pub use error::{OpenFlowError, Result};
+pub use detect::{detect_language, ProjectLanguage};
+pub use error::{ExportError, OpenFlowError, Result};
 pub use execute::{execute_task, execute_task_with_timeout};
 pub use runtime::check_runtimes;
 
