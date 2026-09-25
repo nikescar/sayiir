@@ -14,6 +14,16 @@
   - 80%+ test coverage
   - Full end-to-end integration tests
 
+- **External Dependencies Support (Phase 2)** - Add external dependency management for embedded code
+  - Extended schema with optional `dependencies` field (JSON object: `{"package": "version"}`)
+  - Rust: Generates `Cargo.toml` with dependencies, runs `cargo build --release`
+  - Node.js: Generates `package.json`, runs `npm install`
+  - Python: Generates `requirements.txt`, creates venv, runs `pip install`
+  - Backward compatible (dependencies field is optional)
+  - Multi-language integration tests (Rust→Node→Python chaining)
+  - Documentation with examples for all three languages
+  - 42 total tests passing
+
 ### Dependencies
 - Added `which` for runtime detection
 - Added `dirs` for cache directory path
