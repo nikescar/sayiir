@@ -167,3 +167,150 @@ fn test_import_mermaid_backward_compat() {
         }
     }
 }
+
+#[test]
+fn test_mermaid_round_trip() {
+    let mut rust_deps = serde_json::Map::new();
+    rust_deps.insert("chrono".to_string(), json!("0.4"));
+
+    let mut python_deps = serde_json::Map::new();
+    python_deps.insert("requests".to_string(), json!("2.31.0"));
+
+    let original_spec = OpenFlowSpec {
+        summary: "Round-trip test".to_string(),
+        value: OpenFlowValue {
+            modules: vec![
+                OpenFlowModule {
+                    id: "rust_task".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "rust_task".to_string(),
+                        language: Some("rust".to_string()),
+                        entry_point: Some("run".to_string()),
+                        code: Some(
+                            "fn run(input: Value) -> Result<Value, String> {\n    Ok(input)\n}"
+                                .to_string(),
+                        ),
+                        dependencies: Some(rust_deps),
+                    },
+                },
+                OpenFlowModule {
+                    id: "python_task".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "python_task".to_string(),
+                        language: Some("python".to_string()),
+                        entry_point: Some("main".to_string()),
+                        code: Some("def main(input):\n    return input".to_string()),
+                        dependencies: Some(python_deps),
+                    },
+                },
+            ],
+        },
+    };
+
+    // Export to Mermaid
+    let mermaid = export_mermaid(&original_spec).unwrap();
+
+    // Import back
+    let imported_spec = import_mermaid(&mermaid).unwrap();
+
+    // Verify modules match
+    assert_eq!(
+        imported_spec.value.modules.len(),
+        original_spec.value.modules.len()
+    );
+
+    for (original, imported) in original_spec
+        .value
+        .modules
+        .iter()
+        .zip(&imported_spec.value.modules)
+    {
+        if let (
+            OpenFlowModuleValue::Script {
+                language: orig_lang,
+                entry_point: orig_entry,
+                code: orig_code,
+                dependencies: orig_deps,
+                ..
+            },
+            OpenFlowModuleValue::Script {
+                language: imp_lang,
+                entry_point: imp_entry,
+                code: imp_code,
+                dependencies: imp_deps,
+                ..
+            },
+        ) = (&original.value, &imported.value)
+        {
+            assert_eq!(orig_lang, imp_lang);
+            assert_eq!(orig_entry, imp_entry);
+            assert_eq!(orig_code, imp_code);
+
+            // Dependencies should match
+            match (orig_deps, imp_deps) {
+                (Some(o), Some(i)) => {
+                    assert_eq!(o.len(), i.len());
+                    for (key, val) in o {
+                        assert_eq!(i.get(key), Some(val));
+                    }
+                }
+                (None, None) => {}
+                _ => panic!("Dependency mismatch"),
+            }
+        }
+    }
+
+    // Re-export and verify identical
+    let re_exported = export_mermaid(&imported_spec).unwrap();
+
+    // Should produce same Mermaid markdown
+    assert_eq!(mermaid, re_exported);
+}
+
+#[test]
+fn test_mermaid_multi_language_workflow() {
+    let mut node_deps = serde_json::Map::new();
+    node_deps.insert("axios".to_string(), json!("^1.6.0"));
+
+    let spec = OpenFlowSpec {
+        summary: "Multi-language workflow".to_string(),
+        value: OpenFlowValue {
+            modules: vec![
+                OpenFlowModule {
+                    id: "fetch_data".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "fetch_data".to_string(),
+                        language: Some("node".to_string()),
+                        entry_point: Some("fetch".to_string()),
+                        code: Some(
+                            "async function fetch(input) { return {data: [1,2,3]}; }".to_string(),
+                        ),
+                        dependencies: Some(node_deps),
+                    },
+                },
+                OpenFlowModule {
+                    id: "process_data".to_string(),
+                    value: OpenFlowModuleValue::Script {
+                        path: "process_data".to_string(),
+                        language: Some("python".to_string()),
+                        entry_point: Some("process".to_string()),
+                        code: Some("def process(input):\n    return {\"processed\": True}".to_string()),
+                        dependencies: None,
+                    },
+                },
+            ],
+        },
+    };
+
+    let mermaid = export_mermaid(&spec).unwrap();
+
+    // Verify structure
+    assert!(mermaid.contains("fetch_data[fetch_data]"));
+    assert!(mermaid.contains("process_data[process_data]"));
+    assert!(mermaid.contains("fetch_data --> process_data"));
+    assert!(mermaid.contains("```node"));
+    assert!(mermaid.contains("```python"));
+
+    let imported = import_mermaid(&mermaid).unwrap();
+    assert_eq!(imported.value.modules.len(), 2);
+}

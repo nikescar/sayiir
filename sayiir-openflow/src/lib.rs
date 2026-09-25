@@ -170,9 +170,22 @@ pub fn import_mermaid(markdown: &str) -> Result<OpenFlowSpec> {
     let mut modules: Vec<OpenFlowModule> = Vec::new();
     let mut module_indices: HashMap<String, usize> = HashMap::new();
 
+    let mut in_code_block = false;
     for line in markdown.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("flowchart") || trimmed.is_empty() || trimmed.starts_with("%%%") {
+
+        // Track code block state
+        if trimmed.starts_with("```") {
+            in_code_block = !in_code_block;
+            continue;
+        }
+
+        // Skip non-flowchart lines and code blocks
+        if trimmed.starts_with("flowchart")
+            || trimmed.is_empty()
+            || trimmed.starts_with("%%%")
+            || in_code_block
+        {
             continue;
         }
 
@@ -278,6 +291,11 @@ pub fn import_mermaid(markdown: &str) -> Result<OpenFlowSpec> {
 }
 
 fn parse_mermaid_node(line: &str) -> Option<OpenFlowModule> {
+    // Skip arrow lines
+    if line.contains("-->") {
+        return None;
+    }
+
     // Simple parser: "id[label]" format
     if let Some(bracket_pos) = line.find('[') {
         let id = line[..bracket_pos].trim();
