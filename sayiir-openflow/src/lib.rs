@@ -73,6 +73,9 @@ pub enum OpenFlowModuleValue {
         /// Embedded source code - optional for backward compatibility
         #[serde(skip_serializing_if = "Option::is_none")]
         code: Option<String>,
+        /// External dependencies (package_name -> version) - optional
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dependencies: Option<serde_json::Map<String, serde_json::Value>>,
     },
 }
 
@@ -195,6 +198,7 @@ fn parse_mermaid_node(line: &str) -> Option<OpenFlowModule> {
                     language: None,
                     entry_point: None,
                     code: None,
+                    dependencies: None,
                 },
             });
         }
@@ -280,7 +284,8 @@ mod tests {
                         language: None,
                         entry_point: None,
                         code: None,
-                    },
+                    dependencies: None,
+                },
                 }],
             },
         };
@@ -318,7 +323,8 @@ flowchart TD
                             language: None,
                             entry_point: None,
                             code: None,
-                        },
+                    dependencies: None,
+                },
                     },
                     OpenFlowModule {
                         id: "B".to_string(),
@@ -327,7 +333,8 @@ flowchart TD
                             language: None,
                             entry_point: None,
                             code: None,
-                        },
+                    dependencies: None,
+                },
                     },
                 ],
             },
@@ -410,6 +417,7 @@ flowchart TD
                         language: Some("python".to_string()),
                         entry_point: Some("run".to_string()),
                         code: Some("def run(input): return input".to_string()),
+                                   dependencies: None,
                     },
                 }],
             },
@@ -435,6 +443,7 @@ flowchart TD
                         language: Some("rust".to_string()),
                         entry_point: Some("run".to_string()),
                         code: Some("fn run() {}".to_string()),
+                                   dependencies: None,
                     },
                 }],
             },
@@ -459,6 +468,7 @@ flowchart TD
                         language: Some("nonexistent_language_xyz".to_string()),
                         entry_point: Some("run".to_string()),
                         code: Some("code".to_string()),
+                                   dependencies: None,
                     },
                 }],
             },
@@ -572,7 +582,8 @@ flowchart TD
                         language: None,
                         entry_point: None,
                         code: None,
-                    },
+                    dependencies: None,
+                },
                 }],
             },
         };
@@ -605,7 +616,8 @@ flowchart TD
                         language: None,
                         entry_point: None,
                         code: None,
-                    },
+                    dependencies: None,
+                },
                 }],
             },
         };
