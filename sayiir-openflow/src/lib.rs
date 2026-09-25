@@ -25,6 +25,7 @@ mod compile;
 pub mod detect;
 pub mod error;
 mod execute;
+pub mod parse;
 mod runtime;
 
 pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
