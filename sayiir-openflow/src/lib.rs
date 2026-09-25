@@ -22,6 +22,7 @@
 
 pub mod builder;
 mod compile;
+pub mod deps;
 pub mod detect;
 pub mod error;
 pub mod extract;
@@ -30,6 +31,7 @@ pub mod parse;
 mod runtime;
 
 pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
+pub use deps::{parse_cargo_deps, parse_python_deps, parse_node_deps};
 pub use detect::{detect_language, ProjectLanguage};
 pub use error::{ExportError, OpenFlowError, Result};
 pub use execute::{execute_task, execute_task_with_timeout};
