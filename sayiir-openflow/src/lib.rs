@@ -164,19 +164,111 @@ pub fn export_openflow_json(spec: &OpenFlowSpec) -> Result<String> {
 /// Parses Mermaid flowchart syntax and converts to OpenFlowSpec.
 /// Basic implementation - supports simple flowchart syntax.
 pub fn import_mermaid(markdown: &str) -> Result<OpenFlowSpec> {
-    // Simple parser for "flowchart TD" format
-    let mut modules = Vec::new();
+    use std::collections::HashMap;
+
+    // Parse flowchart nodes first (preserving order)
+    let mut modules: Vec<OpenFlowModule> = Vec::new();
+    let mut module_indices: HashMap<String, usize> = HashMap::new();
 
     for line in markdown.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("flowchart") || trimmed.is_empty() {
+        if trimmed.starts_with("flowchart") || trimmed.is_empty() || trimmed.starts_with("%%%") {
             continue;
         }
 
         // Parse "A[Task Name]" or "A --> B" syntax
         if let Some(node) = parse_mermaid_node(trimmed) {
-            modules.push(node);
+            let id = node.id.clone();
+            if !module_indices.contains_key(&id) {
+                module_indices.insert(id, modules.len());
+                modules.push(node);
+            }
         }
+    }
+
+    // Parse code blocks and metadata
+    let lines: Vec<&str> = markdown.lines().collect();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i].trim();
+
+        // Look for metadata comment: "%%% task_id (language)"
+        if line.starts_with("%%%") && line.contains('(') && line.contains(')') {
+            if let Some((task_id, lang)) = parse_task_metadata(line) {
+                // Parse entry point
+                i += 1;
+                let entry_point = if i < lines.len() && lines[i].trim().starts_with("%%% Entry:") {
+                    Some(
+                        lines[i]
+                            .trim()
+                            .strip_prefix("%%% Entry:")
+                            .unwrap()
+                            .trim()
+                            .to_string(),
+                    )
+                } else {
+                    None
+                };
+
+                // Parse dependencies
+                i += 1;
+                let dependencies = if i < lines.len()
+                    && lines[i].trim().starts_with("%%% Dependencies:")
+                {
+                    let deps_str = lines[i]
+                        .trim()
+                        .strip_prefix("%%% Dependencies:")
+                        .unwrap()
+                        .trim();
+                    if deps_str == "{}" {
+                        None
+                    } else {
+                        match serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
+                            deps_str,
+                        ) {
+                            Ok(deps) => Some(deps),
+                            Err(_) => None,
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                // Parse code block
+                i += 1;
+                let code = if i < lines.len() && lines[i].trim().starts_with("```") {
+                    let mut code_lines = Vec::new();
+                    i += 1; // Skip opening fence
+
+                    while i < lines.len() {
+                        let code_line = lines[i];
+                        if code_line.trim() == "```" {
+                            break;
+                        }
+                        code_lines.push(code_line);
+                        i += 1;
+                    }
+
+                    Some(code_lines.join("\n"))
+                } else {
+                    None
+                };
+
+                // Update module if it exists
+                if let Some(&idx) = module_indices.get(&task_id) {
+                    modules[idx].value = OpenFlowModuleValue::Script {
+                        path: task_id.clone(),
+                        language: Some(lang),
+                        entry_point,
+                        code,
+                        dependencies,
+                    };
+                }
+            }
+        }
+
+        i += 1;
     }
 
     Ok(OpenFlowSpec {
@@ -203,6 +295,21 @@ fn parse_mermaid_node(line: &str) -> Option<OpenFlowModule> {
             });
         }
     }
+    None
+}
+
+fn parse_task_metadata(line: &str) -> Option<(String, String)> {
+    // Parse "%%% task_id (language)"
+    let line = line.trim().strip_prefix("%%%")?.trim();
+
+    if let Some(paren_start) = line.find('(') {
+        if let Some(paren_end) = line.find(')') {
+            let task_id = line[..paren_start].trim().to_string();
+            let language = line[paren_start + 1..paren_end].trim().to_string();
+            return Some((task_id, language));
+        }
+    }
+
     None
 }
 
