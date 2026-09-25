@@ -111,13 +111,39 @@ fn main() {{
 }
 
 async fn compile_node(
-    _module: &OpenFlowModule,
-    _workflow_id: &str,
-    _code: &str,
-    _entry_point: &str,
+    module: &OpenFlowModule,
+    workflow_id: &str,
+    code: &str,
+    entry_point: &str,
 ) -> Result<CachedModule> {
-    // Placeholder for Task 5
-    Err(OpenFlowError::Unsupported("node compilation not implemented yet".into()))
+    // Create cache directory
+    let cache_dir = get_cache_dir(workflow_id, &module.id, "node")?;
+    std::fs::create_dir_all(&cache_dir)?;
+
+    // Write task.js with wrapper
+    let task_js = format!(r#"{code}
+
+// Wrapper
+const input = JSON.parse(process.argv[2]);
+
+Promise.resolve({entry_point}(input))
+    .then(result => {{
+        console.log(JSON.stringify(result));
+        process.exit(0);
+    }})
+    .catch(err => {{
+        console.error(err.message);
+        process.exit(1);
+    }});
+"#);
+
+    let task_path = cache_dir.join("task.js");
+    std::fs::write(&task_path, task_js)?;
+
+    Ok(CachedModule {
+        cache_path: cache_dir,
+        executable: task_path,
+    })
 }
 
 async fn compile_python(
