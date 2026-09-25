@@ -24,6 +24,7 @@ thiserror = { workspace = true }
 which = "6.0"
 dirs = "5.0"
 tokio = { workspace = true, features = ["process", "time"] }
+clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

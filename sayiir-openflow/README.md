@@ -232,6 +232,57 @@ match compile_module(&module, "workflow_id").await {
 
 See `examples/embedded_code_example.rs` for a complete example.
 
+## Simplified Export with Builder API
+
+Use the builder API to create workflows without verbose struct construction:
+
+```rust
+use sayiir_openflow::builder::WorkflowBuilder;
+use sayiir_openflow::{export_mermaid, export_openflow_json};
+
+let spec = WorkflowBuilder::new("My workflow")
+    .rust_task("calculate", "run", r#"
+use serde_json::{json, Value};
+fn run(input: Value) -> Result<Value, String> {
+    let x = input["x"].as_i64().ok_or("missing x")?;
+    Ok(json!({"result": x * 2}))
+}
+"#)
+    .python_task("format", "run", r#"
+def run(input_data):
+    return {"formatted": f"Result: {input_data['result']}"}
+"#)
+    .build();
+
+// Export
+let json = export_openflow_json(&spec)?;
+std::fs::write("workflow.json", json)?;
+```
+
+Builder methods: `rust_task`, `python_task`, `node_task`, plus `*_with_deps` variants.
+
+See `examples/builder_example.rs` for more examples.
+
+## CLI Tool
+
+Convert between formats using the CLI:
+
+```bash
+# Build the CLI
+cargo build --release --bin sayiir-openflow
+
+# Convert Mermaid to JSON
+./target/release/sayiir-openflow --input-mermaid workflow.mmd --output-type openflow --output-file workflow.json
+
+# Convert JSON to Mermaid
+./target/release/sayiir-openflow --input-json workflow.json --output-type mermaidmd --output-file workflow.mmd
+
+# Convert to both formats
+./target/release/sayiir-openflow --input-mermaid workflow.mmd --output-type both
+```
+
+**Note**: Source code extraction (`--input-dir`) is not yet implemented. Use the builder API in your code to export workflows programmatically.
+
 ## License
 
 MIT

@@ -20,6 +20,7 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod builder;
 mod compile;
 mod error;
 mod execute;
