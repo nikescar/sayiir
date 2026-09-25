@@ -41,6 +41,32 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Import OpenFlow workflow and generate standalone project
+    Import {
+        /// Input OpenFlow JSON or Mermaid file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output directory for generated project
+        #[arg(short, long, default_value = "workflow")]
+        output_dir: PathBuf,
+    },
+
+    /// Run OpenFlow workflow directly
+    Run {
+        /// Input OpenFlow JSON or Mermaid file
+        #[arg(value_name = "FILE")]
+        workflow: PathBuf,
+
+        /// JSON input for workflow
+        #[arg(short, long)]
+        input: Option<String>,
+
+        /// Timeout in seconds per task
+        #[arg(short, long, default_value = "30")]
+        timeout: u64,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone)]
@@ -62,6 +88,24 @@ fn main() -> error::ExportResult<()> {
             dry_run,
         } => {
             export_workflow(input, format, output, mermaid_output, dry_run)?;
+        }
+        Command::Import { input, output_dir } => {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(import_workflow_cmd(input, output_dir))?;
+        }
+        Command::Run {
+            workflow,
+            input,
+            timeout,
+        } => {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(run_workflow_cmd(workflow, input, timeout))?;
         }
     }
 
@@ -163,16 +207,36 @@ fn export_workflow(
         }),
     };
 
-    // 6. Match tasks to workflow
+    // 6. Match tasks to workflow and clean with Tree-sitter
     let mut matched_tasks = Vec::new();
     for task_name in &task_names {
         if let Some(task_src) = task_registry.get_by_name(task_name) {
-            println!("✓ Extracted {} ({} lines)", task_src.id, task_src.source_code.lines().count());
+            // Clean code using Tree-sitter (strip decorators/attributes/wrappers)
+            let clean_code = match language {
+                ProjectLanguage::Rust => {
+                    sayiir_openflow::extract_clean::extract_rust_function(&task_src.source_code, &task_src.entry_point)
+                        .unwrap_or_else(|| task_src.source_code.clone())
+                }
+                ProjectLanguage::Python => {
+                    sayiir_openflow::extract_clean::extract_python_function(&task_src.source_code, &task_src.entry_point)
+                        .unwrap_or_else(|| task_src.source_code.clone())
+                }
+                ProjectLanguage::Node => {
+                    sayiir_openflow::extract_clean::extract_javascript_function(&task_src.source_code, &task_src.entry_point)
+                        .unwrap_or_else(|| task_src.source_code.clone())
+                }
+            };
+
+            println!("✓ Extracted {} ({} lines → {} lines clean)",
+                task_src.id,
+                task_src.source_code.lines().count(),
+                clean_code.lines().count()
+            );
 
             matched_tasks.push(TaskMetadata {
                 id: task_src.id.clone(),
                 language: lang_enum,
-                source_code: task_src.source_code.clone(),
+                source_code: clean_code,
                 entry_point: task_src.entry_point.clone(),
                 dependencies: deps.clone(),
             });
@@ -240,4 +304,70 @@ fn generate_mermaid_stub(spec: &OpenFlowSpec) -> String {
         mermaid.push_str("    Start --> End[Done]\n");
     }
     mermaid
+}
+
+async fn import_workflow_cmd(input: PathBuf, output_dir: PathBuf) -> error::ExportResult<()> {
+    // Read input file
+    let content = std::fs::read_to_string(&input).map_err(|e| error::ExportError::FileReadError {
+        path: input.clone(),
+        source: e,
+    })?;
+
+    // Parse spec (auto-detect JSON vs Mermaid)
+    let spec = if input.extension().and_then(|s| s.to_str()) == Some("md") {
+        import_mermaid(&content)?
+    } else {
+        import_openflow_json(&content)?
+    };
+
+    println!("✓ Parsed workflow: {}", spec.summary);
+    println!("  Modules: {}", spec.value.modules.len());
+
+    // Import workflow
+    import_workflow(&spec, &output_dir).await?;
+
+    println!("✓ Generated project in {}", output_dir.display());
+    Ok(())
+}
+
+async fn run_workflow_cmd(
+    workflow: PathBuf,
+    input: Option<String>,
+    timeout: u64,
+) -> error::ExportResult<()> {
+    use std::time::Duration;
+
+    // Read workflow file
+    let content = std::fs::read_to_string(&workflow).map_err(|e| error::ExportError::FileReadError {
+        path: workflow.clone(),
+        source: e,
+    })?;
+
+    // Parse spec (auto-detect JSON vs Mermaid)
+    let spec = if workflow.extension().and_then(|s| s.to_str()) == Some("md") {
+        import_mermaid(&content)?
+    } else {
+        import_openflow_json(&content)?
+    };
+
+    println!("✓ Loaded workflow: {}", spec.summary);
+
+    // Parse input JSON
+    let input_value = if let Some(json_str) = input {
+        serde_json::from_str(&json_str).map_err(|e| {
+            error::ExportError::InvalidWorkflowSyntax(format!("Invalid input JSON: {}", e))
+        })?
+    } else {
+        serde_json::json!({})
+    };
+
+    // Run workflow
+    println!("→ Running workflow...");
+    let result = run_workflow_with_timeout(&spec, input_value, Duration::from_secs(timeout)).await?;
+
+    // Print result
+    println!("\n✓ Workflow completed:");
+    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+
+    Ok(())
 }

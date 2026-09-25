@@ -74,11 +74,20 @@ async fn compile_rust(
         serde_json::Map::new()
     };
 
+    // Detect if function is async
+    let is_async = code.contains(&format!("async fn {}", entry_point));
+
     // Build dependencies section for Cargo.toml
     let mut deps_section = String::from("[dependencies]\nserde_json = \"1.0\"\n");
+
+    // Add tokio if async function
+    if is_async {
+        deps_section.push_str("tokio = { version = \"1\", features = [\"full\"] }\n");
+    }
+
     for (pkg, version) in dependencies {
-        // Skip serde_json since it's already included
-        if pkg == "serde_json" {
+        // Skip serde_json and tokio since they may already be included
+        if pkg == "serde_json" || (pkg == "tokio" && is_async) {
             continue;
         }
         if let Some(ver_str) = version.as_str() {
@@ -104,9 +113,42 @@ edition = "2021"
     let src_dir = cache_dir.join("src");
     std::fs::create_dir_all(&src_dir)?;
 
-    // Write main.rs with wrapper
-    let main_rs = format!(
-        r#"{code}
+    // Write main.rs with wrapper (async or sync)
+    let main_rs = if is_async {
+        format!(
+            r#"// Common type aliases
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+{code}
+
+#[tokio::main]
+async fn main() {{
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {{
+        eprintln!("Usage: {{}} <json_input>", args[0]);
+        std::process::exit(1);
+    }}
+
+    let input = serde_json::from_str(&args[1]).expect("invalid JSON input");
+
+    match {entry_point}(input).await {{
+        Ok(result) => {{
+            println!("{{}}", serde_json::to_string(&result).expect("failed to serialize result"));
+        }}
+        Err(e) => {{
+            eprintln!("Error: {{}}", e);
+            std::process::exit(1);
+        }}
+    }}
+}}
+"#
+        )
+    } else {
+        format!(
+            r#"// Common type aliases
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+{code}
 
 fn main() {{
     let args: Vec<String> = std::env::args().collect();
@@ -128,7 +170,8 @@ fn main() {{
     }}
 }}
 "#
-    );
+        )
+    };
 
     std::fs::write(src_dir.join("main.rs"), main_rs)?;
 

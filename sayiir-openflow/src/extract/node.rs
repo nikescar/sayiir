@@ -36,10 +36,11 @@ fn extract_task_body(source: &str, start: usize) -> Result<String> {
     let mut depth = 0;
     let mut end_pos = brace_start;
 
-    for (i, ch) in source[brace_start..].chars().enumerate() {
-        match ch {
-            '{' => depth += 1,
-            '}' => {
+    // Use byte iteration instead of char iteration to preserve byte offsets
+    for (i, &byte) in source.as_bytes()[brace_start..].iter().enumerate() {
+        match byte {
+            b'{' => depth += 1,
+            b'}' => {
                 depth -= 1;
                 if depth == 0 {
                     end_pos = brace_start + i + 1;
@@ -50,13 +51,15 @@ fn extract_task_body(source: &str, start: usize) -> Result<String> {
         }
     }
 
-    // Add closing );
-    while end_pos < source.len() {
-        let ch = source.chars().nth(end_pos).unwrap();
-        if ch == ';' {
+    // Add closing ); - skip whitespace, commas, and closing parens until we find semicolon
+    let bytes = source.as_bytes();
+    while end_pos < bytes.len() {
+        let byte = bytes[end_pos];
+        let ch = byte as char;
+        if byte == b';' {
             end_pos += 1;
             break;
-        } else if !ch.is_whitespace() && ch != ')' {
+        } else if !ch.is_ascii_whitespace() && byte != b')' && byte != b',' {
             break;
         }
         end_pos += 1;

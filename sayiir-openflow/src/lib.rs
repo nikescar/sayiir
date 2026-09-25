@@ -26,8 +26,11 @@ pub mod deps;
 pub mod detect;
 pub mod error;
 pub mod extract;
+pub mod extract_clean;
 mod execute;
+mod import;
 pub mod parse;
+mod run;
 mod runtime;
 pub mod scan;
 
@@ -38,6 +41,8 @@ pub use detect::{detect_language, ProjectLanguage};
 pub use error::{ExportError, OpenFlowError, Result};
 pub use execute::{execute_task, execute_task_with_timeout};
 pub use extract::TaskSource;
+pub use import::import_workflow;
+pub use run::{run_workflow, run_workflow_with_timeout};
 pub use runtime::check_runtimes;
 
 /// OpenFlow JSON specification (Windmill format)
