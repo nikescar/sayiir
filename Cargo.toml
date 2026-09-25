@@ -18,6 +18,7 @@ exclude = [
     "examples/hello-world-rs",
     "examples/hello-world-sqlite-rs",
     "examples/video-pipeline-rs",
+    "examples/video-pipeline-rs-openflow",
     "benchmarks",
 ]
 
