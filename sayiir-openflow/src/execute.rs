@@ -28,13 +28,13 @@ pub async fn execute_task_with_timeout(
 
     let (command, args): (String, Vec<String>) = match language {
         "rust" => (
-            cached.executable.to_str().unwrap().to_string(),
+            cached.executable.display().to_string(),
             vec![input_json.clone()],
         ),
         "node" => (
             "node".to_string(),
             vec![
-                cached.executable.to_str().unwrap().to_string(),
+                cached.executable.display().to_string(),
                 input_json.clone(),
             ],
         ),
@@ -42,14 +42,14 @@ pub async fn execute_task_with_timeout(
             // Use venv python if it exists
             let venv_python = cached.cache_path.join("venv/bin/python3");
             let python_cmd = if venv_python.exists() {
-                venv_python.to_str().unwrap().to_string()
+                venv_python.display().to_string()
             } else {
                 "python3".to_string()
             };
             (
                 python_cmd,
                 vec![
-                    cached.executable.to_str().unwrap().to_string(),
+                    cached.executable.display().to_string(),
                     input_json.clone(),
                 ],
             )

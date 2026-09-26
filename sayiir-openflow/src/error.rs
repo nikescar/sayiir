@@ -96,6 +96,9 @@ pub enum ExportError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("OpenFlow error: {0}")]
+    OpenFlowError(#[from] OpenFlowError),
 }
 
 pub type ExportResult<T> = std::result::Result<T, ExportError>;
