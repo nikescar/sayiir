@@ -61,32 +61,109 @@ pub fn extract_python_function(source: &str, function_name: &str) -> Option<Stri
     let tree = parser.parse(source, None)?;
     let root = tree.root_node();
 
-    find_python_function(&root, source, function_name)
-}
+    // For simple extraction without dependencies, just find the function
+    // This matches the original behavior for backwards compatibility
+    if root.kind() != "module" {
+        return None;
+    }
 
-fn find_python_function(node: &tree_sitter::Node, source: &str, target_name: &str) -> Option<String> {
-    if node.kind() == "function_definition" {
-        for child in node.children(&mut node.walk()) {
-            if child.kind() == "identifier" {
-                let name = child.utf8_text(source.as_bytes()).ok()?;
-                if name == target_name {
-                    let func_start = node.start_byte();
-                    let func_end = node.end_byte();
-                    let func_text = &source[func_start..func_end];
-                    return Some(remove_python_decorators(func_text));
+    // Extract imports, constants, classes, and the function
+    let mut imports = Vec::new();
+    let mut classes = Vec::new();
+    let mut constants = Vec::new();
+    let mut function_text = None;
+
+    for child in root.children(&mut root.walk()) {
+        match child.kind() {
+            "import_statement" | "import_from_statement" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    imports.push(text.to_string());
                 }
             }
+            "class_definition" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    classes.push(text.to_string());
+                }
+            }
+            "expression_statement" => {
+                // Module-level assignment (constant)
+                if let Some(assignment) = child.child(0) {
+                    if assignment.kind() == "assignment" {
+                        if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                            // Include constants (simple assignments at module level)
+                            constants.push(text.to_string());
+                        }
+                    }
+                }
+            }
+            "decorated_definition" => {
+                // Function with decorator - extract the inner function_definition
+                for dec_child in child.children(&mut child.walk()) {
+                    if dec_child.kind() == "function_definition" {
+                        // Check if this is the target function
+                        for func_child in dec_child.children(&mut dec_child.walk()) {
+                            if func_child.kind() == "identifier" {
+                                if let Ok(name) = func_child.utf8_text(source.as_bytes()) {
+                                    if name == function_name {
+                                        if let Ok(text) = dec_child.utf8_text(source.as_bytes()) {
+                                            function_text = Some(text.to_string());
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "function_definition" => {
+                // Function without decorator
+                for func_child in child.children(&mut child.walk()) {
+                    if func_child.kind() == "identifier" {
+                        if let Ok(name) = func_child.utf8_text(source.as_bytes()) {
+                            if name == function_name {
+                                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                                    function_text = Some(text.to_string());
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
-    for child in node.children(&mut node.walk()) {
-        if let Some(result) = find_python_function(&child, source, target_name) {
-            return Some(result);
-        }
+    // Return just the function if no dependencies needed
+    let func = function_text?;
+    if imports.is_empty() && classes.is_empty() && constants.is_empty() {
+        return Some(func);
     }
 
-    None
+    // Build complete code with dependencies
+    let mut result = String::new();
+
+    if !imports.is_empty() {
+        result.push_str(&imports.join("\n"));
+        result.push_str("\n\n");
+    }
+
+    if !constants.is_empty() {
+        result.push_str(&constants.join("\n"));
+        result.push_str("\n\n");
+    }
+
+    if !classes.is_empty() {
+        result.push_str(&classes.join("\n\n"));
+        result.push_str("\n\n");
+    }
+
+    result.push_str(&func);
+
+    Some(result)
 }
+
 
 fn remove_python_decorators(func_text: &str) -> String {
     let lines: Vec<&str> = func_text.lines().collect();
@@ -248,6 +325,63 @@ def parse_query(raw: dict) -> dict:
         let clean = result.unwrap();
         assert!(!clean.contains("@task"));
         assert!(clean.contains("def parse_query"));
+    }
+
+    #[test]
+    fn test_extract_python_with_dependencies() {
+        let source = r#"from models import ResearchQuery
+import re
+
+DRAFTS_DIR = "reports/drafts"
+
+class Helper:
+    pass
+
+@task(description="Parse query")
+def parse_query(raw: dict) -> dict:
+    query = ResearchQuery.model_validate(raw)
+    return query.model_dump()
+"#;
+        let result = extract_python_function(source, "parse_query");
+        assert!(result.is_some());
+        let clean = result.unwrap();
+
+        // Should include imports
+        assert!(clean.contains("from models import ResearchQuery"));
+        assert!(clean.contains("import re"));
+
+        // Should include constants
+        assert!(clean.contains("DRAFTS_DIR"));
+
+        // Should include classes
+        assert!(clean.contains("class Helper"));
+
+        // Should include function without decorator
+        assert!(!clean.contains("@task"));
+        assert!(clean.contains("def parse_query"));
+    }
+
+    #[test]
+    fn test_extract_python_with_class_in_same_file() {
+        let source = r#"class MyModel:
+    def __init__(self, value):
+        self.value = value
+
+@task(description="Process data")
+def process_data(raw: dict) -> dict:
+    model = MyModel(raw["value"])
+    return {"result": model.value}
+"#;
+        let result = extract_python_function(source, "process_data");
+        assert!(result.is_some());
+        let clean = result.unwrap();
+
+        // Should include class
+        assert!(clean.contains("class MyModel"));
+
+        // Should include function without decorator
+        assert!(!clean.contains("@task"));
+        assert!(clean.contains("def process_data"));
     }
 
     #[test]

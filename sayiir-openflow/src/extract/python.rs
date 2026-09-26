@@ -42,14 +42,12 @@ pub fn extract_all_python_tasks(source: &str) -> Result<Vec<TaskSource>> {
                 // Extract function body (indent-aware)
                 let (fn_source, end_idx) = extract_python_function(&lines, i);
 
-                // Include all decorator lines
-                let decorator_lines: Vec<&str> = lines[decorator_start..i].iter().copied().collect();
-                let full_source = format!("{}\n{}", decorator_lines.join("\n"), fn_source);
-
+                // Store the full file source instead of just the function
+                // This allows extract_clean to extract imports, classes, and constants
                 tasks.push(TaskSource {
                     id: fn_name.clone(),
                     entry_point: fn_name,
-                    source_code: full_source,
+                    source_code: source.to_string(),
                 });
 
                 i = end_idx - 1; // -1 because we'll increment at the end of the loop
