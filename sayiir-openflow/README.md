@@ -1,6 +1,6 @@
 # sayiir-openflow
 
-Export Rust/Python/Node.js workflows to portable OpenFlow JSON and Mermaid markdown.
+Import, export, and run Rust/Python/Node.js workflows using portable OpenFlow JSON and Mermaid markdown.
 
 ## Installation
 
@@ -28,6 +28,10 @@ cargo sayiir-openflow --help
 
 ## CLI Usage
 
+### Export Command
+
+Export existing projects to portable OpenFlow JSON and Mermaid:
+
 ```bash
 # Export current project to OpenFlow JSON and Mermaid
 cargo-sayiir-openflow sayiir-openflow export
@@ -47,19 +51,92 @@ cargo-sayiir-openflow sayiir-openflow export \
 cargo-sayiir-openflow sayiir-openflow export --dry-run
 ```
 
+### Import Command
+
+Generate standalone executable projects from OpenFlow JSON or Mermaid:
+
+```bash
+# Import workflow and generate runnable project
+cargo-sayiir-openflow sayiir-openflow import workflow.json \
+  --output-dir ./my-workflow
+
+# Import from Mermaid markdown
+cargo-sayiir-openflow sayiir-openflow import workflow.md \
+  --output-dir ./my-workflow
+
+# Overwrite existing directory
+cargo-sayiir-openflow sayiir-openflow import workflow.json \
+  --output-dir ./my-workflow \
+  --overwrite
+```
+
+**Output structure:**
+
+**Mono-language workflow** (all tasks same language):
+```
+my-workflow/
+├── Cargo.toml (or package.json, pyproject.toml)
+├── src/
+│   ├── main.rs (entry point)
+│   └── tasks/ (extracted task code)
+└── README.md
+```
+
+**Multi-language workflow** (mixed Rust/Python/Node.js):
+```
+my-workflow/
+├── rust_tasks/
+│   ├── Cargo.toml
+│   └── src/
+├── python_tasks/
+│   ├── pyproject.toml
+│   └── tasks/
+├── node_tasks/
+│   ├── package.json
+│   └── tasks/
+├── workflow.json
+└── README.md
+```
+
+### Run Command
+
+Execute workflows directly without generating a project:
+
+```bash
+# Run workflow with JSON input
+cargo-sayiir-openflow sayiir-openflow run workflow.json \
+  --input '{"url": "https://example.com"}'
+
+# Run with custom timeout (default: 30s)
+cargo-sayiir-openflow sayiir-openflow run workflow.json \
+  --input '{"data": "test"}' \
+  --timeout 60
+
+# Run without input (empty JSON object)
+cargo-sayiir-openflow sayiir-openflow run workflow.json
+```
+
+**Features:**
+- Automatically compiles embedded code on first run
+- Caches compiled modules in `~/.sayiir/cache/`
+- Chains task outputs → inputs sequentially
+- Returns final result as JSON
+
 ## Cargo Plugin Usage
 
 After installing to `~/.cargo/bin/`, use as a cargo subcommand:
 
 ```bash
-# Navigate to your workflow project
+# Export workflow
 cd examples/video-pipeline-rs
-
-# Export with default settings
 cargo sayiir-openflow export
 
-# Export with options
-cargo sayiir-openflow export --format both --dry-run
+# Import and run workflow
+cargo sayiir-openflow import workflow.json --output-dir ./imported
+cd imported && cargo run
+
+# Run workflow directly
+cargo sayiir-openflow run workflow.json --input '{"url": "https://..."}'
 ```
 
 ## Supported Languages

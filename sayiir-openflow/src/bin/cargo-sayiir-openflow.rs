@@ -212,18 +212,31 @@ fn export_workflow(
     for task_name in &task_names {
         if let Some(task_src) = task_registry.get_by_name(task_name) {
             // Clean code using Tree-sitter (strip decorators/attributes/wrappers)
+            // Pass project_dir for cross-module type resolution
             let clean_code = match language {
                 ProjectLanguage::Rust => {
-                    sayiir_openflow::extract_clean::extract_rust_function(&task_src.source_code, &task_src.entry_point)
-                        .unwrap_or_else(|| task_src.source_code.clone())
+                    sayiir_openflow::extract_clean::extract_rust_function(
+                        &task_src.source_code,
+                        &task_src.entry_point,
+                        Some(&project_dir)
+                    )
+                    .unwrap_or_else(|| task_src.source_code.clone())
                 }
                 ProjectLanguage::Python => {
-                    sayiir_openflow::extract_clean::extract_python_function(&task_src.source_code, &task_src.entry_point)
-                        .unwrap_or_else(|| task_src.source_code.clone())
+                    sayiir_openflow::extract_clean::extract_python_function(
+                        &task_src.source_code,
+                        &task_src.entry_point,
+                        Some(&project_dir)
+                    )
+                    .unwrap_or_else(|| task_src.source_code.clone())
                 }
                 ProjectLanguage::Node => {
-                    sayiir_openflow::extract_clean::extract_javascript_function(&task_src.source_code, &task_src.entry_point)
-                        .unwrap_or_else(|| task_src.source_code.clone())
+                    sayiir_openflow::extract_clean::extract_javascript_function(
+                        &task_src.source_code,
+                        &task_src.entry_point,
+                        Some(&project_dir)
+                    )
+                    .unwrap_or_else(|| task_src.source_code.clone())
                 }
             };
 

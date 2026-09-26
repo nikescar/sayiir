@@ -1,9 +1,14 @@
 //! Extract clean function code using Tree-sitter (no decorators/attributes/wrappers)
 
 use tree_sitter::Parser;
+use std::path::{Path, PathBuf};
 
-/// Extract Rust function without #[task] attributes
-pub fn extract_rust_function(source: &str, function_name: &str) -> Option<String> {
+/// Extract Rust function without #[task] attributes, with optional cross-module type resolution
+pub fn extract_rust_function(
+    source: &str,
+    function_name: &str,
+    project_dir: Option<&Path>,
+) -> Option<String> {
     let mut parser = Parser::new();
     parser.set_language(&tree_sitter_rust::LANGUAGE.into()).ok()?;
 
@@ -14,18 +19,23 @@ pub fn extract_rust_function(source: &str, function_name: &str) -> Option<String
         return None;
     }
 
-    // Extract use declarations, type definitions, constants, and the function
+    // Extract use declarations, type definitions, constants, helper functions, impl blocks, and the target function
     let mut uses = Vec::new();
     let mut types = Vec::new();
     let mut constants = Vec::new();
+    let mut helper_functions = Vec::new();
+    let mut impl_blocks = Vec::new();
     let mut function_text = None;
 
     for child in root.children(&mut root.walk()) {
         match child.kind() {
             "use_declaration" => {
                 if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    // Skip sayiir runtime imports (not needed in standalone projects)
-                    if !text.contains("sayiir_runtime") && !text.contains("sayiir::") {
+                    // Skip sayiir runtime imports (but keep crate:: imports for type extraction)
+                    if !text.contains("sayiir_runtime")
+                        && !text.contains("sayiir::")
+                        && !text.contains("sayiir_core")
+                        && !text.contains("sayiir_persistence") {
                         uses.push(text.to_string());
                     }
                 }
@@ -62,6 +72,22 @@ pub fn extract_rust_function(source: &str, function_name: &str) -> Option<String
                         if let Ok(text) = child.utf8_text(source.as_bytes()) {
                             function_text = Some(text.to_string());
                         }
+                    } else {
+                        // Collect other functions as helpers (but skip test functions)
+                        if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                            if !text.contains("#[test]") && !text.contains("#[cfg(test)]") {
+                                helper_functions.push(text.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            "impl_item" => {
+                // Extract impl blocks (for trait implementations, etc.)
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    // Filter out sayiir-specific impls
+                    if !text.contains("sayiir_runtime") && !text.contains("sayiir::") {
+                        impl_blocks.push(text.to_string());
                     }
                 }
             }
@@ -71,15 +97,40 @@ pub fn extract_rust_function(source: &str, function_name: &str) -> Option<String
 
     // Return just the function if no dependencies needed
     let func = function_text?;
-    if uses.is_empty() && types.is_empty() && constants.is_empty() {
+
+    // Extract cross-module types if project_dir is available
+    let mut module_types = Vec::new();
+    if let Some(proj_dir) = project_dir {
+        use std::io::Write;
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/parse_glob_debug.log")
+            .and_then(|mut f| writeln!(f, "extract_rust_function: checking {} uses for {}", uses.len(), function_name));
+
+        for use_decl in &uses {
+            if let Some(module_path) = parse_glob_import(use_decl) {
+                if let Some(types) = extract_module_types(proj_dir, &module_path) {
+                    module_types.push(types);
+                }
+            }
+        }
+    }
+
+    if uses.is_empty() && types.is_empty() && constants.is_empty() && module_types.is_empty() && helper_functions.is_empty() && impl_blocks.is_empty() {
         return Some(func);
     }
 
     // Build complete code with dependencies
     let mut result = String::new();
 
-    if !uses.is_empty() {
-        result.push_str(&uses.join("\n"));
+    // Output use declarations (filter out crate:: imports since types are inlined)
+    let filtered_uses: Vec<String> = uses.iter()
+        .filter(|u| !u.contains("use crate::"))
+        .cloned()
+        .collect();
+    if !filtered_uses.is_empty() {
+        result.push_str(&filtered_uses.join("\n"));
         result.push_str("\n\n");
     }
 
@@ -88,8 +139,26 @@ pub fn extract_rust_function(source: &str, function_name: &str) -> Option<String
         result.push_str("\n\n");
     }
 
+    // Add cross-module types first
+    if !module_types.is_empty() {
+        result.push_str(&module_types.join("\n\n"));
+        result.push_str("\n\n");
+    }
+
     if !types.is_empty() {
         result.push_str(&types.join("\n\n"));
+        result.push_str("\n\n");
+    }
+
+    // Add impl blocks
+    if !impl_blocks.is_empty() {
+        result.push_str(&impl_blocks.join("\n\n"));
+        result.push_str("\n\n");
+    }
+
+    // Add helper functions
+    if !helper_functions.is_empty() {
+        result.push_str(&helper_functions.join("\n\n"));
         result.push_str("\n\n");
     }
 
@@ -107,6 +176,166 @@ fn extract_function_name(func_node: &tree_sitter::Node, source: &str) -> Option<
         }
     }
     None
+}
+
+/// Parse glob import to extract module path: "use crate::pipeline::*;" -> Some("crate::pipeline")
+fn parse_glob_import(use_decl: &str) -> Option<String> {
+    use std::io::Write;
+    let trimmed = use_decl.trim();
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/parse_glob_debug.log")
+        .and_then(|mut f| writeln!(f, "parse_glob_import: input='{}'", trimmed));
+
+    // Match patterns like: use crate::pipeline::*;
+    if let Some(after_use) = trimmed.strip_prefix("use ") {
+        let after_use = after_use.trim();
+        if let Some(module) = after_use.strip_suffix(";") {
+            let module = module.trim();
+            if let Some(module_path) = module.strip_suffix("::*") {
+                let module_path = module_path.trim();
+                if module_path.starts_with("crate::") {
+                    let _ = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open("/tmp/parse_glob_debug.log")
+                        .and_then(|mut f| writeln!(f, "MATCHED: module_path='{}'", module_path));
+                    return Some(module_path.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Resolve module path to filesystem path: "crate::pipeline" -> "src/pipeline.rs"
+fn resolve_module_path(project_dir: &Path, module: &str) -> Option<PathBuf> {
+    let parts: Vec<_> = module.strip_prefix("crate::")?.split("::").collect();
+
+    // Try src/module.rs first
+    let mut path = project_dir.join("src");
+    for part in &parts {
+        path.push(part);
+    }
+    path.set_extension("rs");
+    if path.exists() {
+        return Some(path);
+    }
+
+    // Try src/module/mod.rs
+    let mut path = project_dir.join("src");
+    for part in &parts {
+        path.push(part);
+    }
+    path.push("mod.rs");
+    if path.exists() {
+        return Some(path);
+    }
+
+    None
+}
+
+/// Extract type definitions and public functions from a module file
+fn extract_module_types(project_dir: &Path, module_path: &str) -> Option<String> {
+    let module_file = resolve_module_path(project_dir, module_path)?;
+    let module_source = std::fs::read_to_string(&module_file).ok()?;
+
+    let mut parser = Parser::new();
+    parser.set_language(&tree_sitter_rust::LANGUAGE.into()).ok()?;
+    let tree = parser.parse(&module_source, None)?;
+    let root = tree.root_node();
+
+    if root.kind() != "source_file" {
+        return None;
+    }
+
+    let mut uses = Vec::new();
+    let mut types = Vec::new();
+
+    for child in root.children(&mut root.walk()) {
+        if let Ok(text) = child.utf8_text(module_source.as_bytes()) {
+            match child.kind() {
+                "use_declaration" => {
+                    // Extract use declarations (except sayiir ones)
+                    let filtered = filter_sayiir_attributes(text);
+                    if !filtered.trim().is_empty() {
+                        uses.push(filtered);
+                    }
+                }
+                "struct_item" | "enum_item" | "type_item" | "const_item" | "static_item" => {
+                    // Filter out sayiir-specific attributes
+                    let filtered = filter_sayiir_attributes(text);
+                    if !filtered.trim().is_empty() {
+                        types.push(filtered);
+                    }
+                }
+                "function_item" => {
+                    // Extract public functions (helpers that might be called by tasks)
+                    if text.trim_start().starts_with("pub ") {
+                        let filtered = filter_sayiir_attributes(text);
+                        if !filtered.trim().is_empty() {
+                            types.push(filtered);
+                        }
+                    }
+                }
+                "attribute_item" => {
+                    // Struct/enum/function with attributes
+                    let has_type = child.children(&mut child.walk())
+                        .any(|c| matches!(c.kind(), "struct_item" | "enum_item"));
+                    let has_pub_fn = child.children(&mut child.walk())
+                        .any(|c| {
+                            if c.kind() == "function_item" {
+                                if let Ok(fn_text) = c.utf8_text(module_source.as_bytes()) {
+                                    return fn_text.trim_start().starts_with("pub ");
+                                }
+                            }
+                            false
+                        });
+
+                    if has_type || has_pub_fn {
+                        // Extract the whole attribute_item (includes #[derive(...)] + struct/enum/fn)
+                        let filtered = filter_sayiir_attributes(text);
+                        if !filtered.trim().is_empty() {
+                            types.push(filtered);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if uses.is_empty() && types.is_empty() {
+        return None;
+    }
+
+    // Combine uses and types
+    let mut result = String::new();
+    if !uses.is_empty() {
+        result.push_str(&uses.join("\n"));
+        result.push_str("\n\n");
+    }
+    if !types.is_empty() {
+        result.push_str(&types.join("\n\n"));
+    }
+
+    Some(result)
+}
+
+/// Filter out sayiir-specific attributes and imports
+fn filter_sayiir_attributes(code: &str) -> String {
+    code.lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            // Skip sayiir-specific derives and imports
+            !trimmed.contains("#[derive(BranchKey)]") &&
+            !trimmed.starts_with("use sayiir_runtime::") &&
+            !trimmed.starts_with("use sayiir_core::") &&
+            !trimmed.starts_with("use sayiir::")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Check if a Python assignment is a simple constant (not a workflow definition or function call)
@@ -199,7 +428,7 @@ fn is_simple_javascript_constant(text: &str) -> bool {
 }
 
 /// Extract Python function without @task decorator
-pub fn extract_python_function(source: &str, function_name: &str) -> Option<String> {
+pub fn extract_python_function(source: &str, function_name: &str, _project_dir: Option<&Path>) -> Option<String> {
     let mut parser = Parser::new();
     parser.set_language(&tree_sitter_python::LANGUAGE.into()).ok()?;
 
@@ -332,7 +561,7 @@ fn remove_python_decorators(func_text: &str) -> String {
 }
 
 /// Extract JavaScript/TypeScript function from task() wrapper
-pub fn extract_javascript_function(source: &str, function_name: &str) -> Option<String> {
+pub fn extract_javascript_function(source: &str, function_name: &str, _project_dir: Option<&Path>) -> Option<String> {
     let mut parser = Parser::new();
     // Use TypeScript parser for both TS and JS (TS is superset of JS)
     parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()).ok()?;

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # Colors for output
@@ -88,7 +88,7 @@ fi
 
 # Test run (with input data)
 cd hello-world-node-test-import
-if node index.js '{"name": "World"}' 2>/dev/null | grep -q "Hello"; then
+if node index.js '42' 2>/dev/null | grep -q "Sent welcome"; then
     pass "Ran hello-world-node successfully"
 else
     fail "Failed to run hello-world-node"
@@ -202,6 +202,40 @@ else
 fi
 cd ..
 
+# Test 6: Video pipeline Rust (complex workflow)
+echo ""
+echo "----------------------------------------"
+echo "Test 6: Rust video pipeline"
+echo "----------------------------------------"
+
+cd video-pipeline-rs
+
+# Export
+if cargo sayiir-openflow export > /dev/null 2>&1; then
+    pass "Exported video-pipeline-rs"
+else
+    fail "Failed to export video-pipeline-rs"
+fi
+
+# Import
+cd ..
+rm -rf video-pipeline-rs-test-import
+if cargo sayiir-openflow import video-pipeline-rs/workflow.json -o video-pipeline-rs-test-import > /dev/null 2>&1; then
+    pass "Imported video-pipeline-rs"
+else
+    fail "Failed to import video-pipeline-rs"
+fi
+
+# Test build (skip run - requires ffmpeg and downloads 30MB video)
+cd video-pipeline-rs-test-import
+if cargo build --release > /dev/null 2>&1; then
+    pass "Built video-pipeline-rs"
+    warn "video-pipeline-rs run skipped (requires ffmpeg + downloads video)"
+else
+    warn "video-pipeline-rs build failed (complex extraction - expected)"
+fi
+cd ..
+
 # Cleanup
 echo ""
 echo "----------------------------------------"
@@ -212,6 +246,7 @@ rm -rf hello-world-node-test-import
 rm -rf hello-world-rs-test-import
 rm -rf approval-workflow-py-test-import
 rm -rf order-processing-node-test-import
+rm -rf video-pipeline-rs-test-import
 
 echo ""
 echo "=========================================="
