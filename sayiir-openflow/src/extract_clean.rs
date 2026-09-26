@@ -24,7 +24,10 @@ pub fn extract_rust_function(source: &str, function_name: &str) -> Option<String
         match child.kind() {
             "use_declaration" => {
                 if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    uses.push(text.to_string());
+                    // Skip sayiir runtime imports (not needed in standalone projects)
+                    if !text.contains("sayiir_runtime") && !text.contains("sayiir::") {
+                        uses.push(text.to_string());
+                    }
                 }
             }
             "struct_item" | "enum_item" | "type_item" => {
@@ -106,6 +109,95 @@ fn extract_function_name(func_node: &tree_sitter::Node, source: &str) -> Option<
     None
 }
 
+/// Check if a Python assignment is a simple constant (not a workflow definition or function call)
+fn is_simple_python_constant(text: &str) -> bool {
+    let trimmed = text.trim();
+
+    // Skip workflow definitions (Flow, flow, task wrapper)
+    if trimmed.contains("Flow(") || trimmed.contains("flow(") {
+        return false;
+    }
+
+    // Skip function calls (anything with parentheses on the right side of =)
+    if let Some(eq_pos) = trimmed.find('=') {
+        let right_side = &trimmed[eq_pos + 1..].trim();
+        // Allow Path("...") for pathlib.Path constants
+        if right_side.contains('(') && !right_side.starts_with("Path(") {
+            return false;
+        }
+    }
+
+    // Skip runtime execution
+    if trimmed.contains("run_workflow") || trimmed.contains("runDurableWorkflow") {
+        return false;
+    }
+
+    true
+}
+
+/// Check if a JavaScript/TypeScript const declaration is a simple constant
+fn is_simple_javascript_constant(text: &str) -> bool {
+    let trimmed = text.trim();
+
+    // Skip task definitions (already handled separately)
+    if trimmed.contains("task(") {
+        return false;
+    }
+
+    // Skip workflow definitions
+    if trimmed.contains("flow(") || trimmed.contains("Flow(") || trimmed.contains("branch(") {
+        return false;
+    }
+
+    // Skip object instantiation (new keyword)
+    if trimmed.contains("new ") {
+        return false;
+    }
+
+    // Skip object literals (test data, config objects)
+    if let Some(eq_pos) = trimmed.find('=') {
+        let right_side = &trimmed[eq_pos + 1..].trim();
+        // Skip object literals { ... }
+        if right_side.starts_with("{") {
+            return false;
+        }
+        // Skip function calls
+        if right_side.contains("(") {
+            return false;
+        }
+    }
+
+    // Skip runtime execution
+    if trimmed.contains("runDurableWorkflow") || trimmed.contains("run_workflow") {
+        return false;
+    }
+
+    // Only include simple primitive constants (numbers, strings, booleans)
+    // Skip if it looks like a variable name (lowercase start, not a primitive)
+    if let Some(eq_pos) = trimmed.find('=') {
+        let left_side = &trimmed[..eq_pos].trim();
+        let right_side = &trimmed[eq_pos + 1..].trim();
+
+        // Extract variable name
+        if let Some(var_name) = left_side.split_whitespace().last() {
+            // Only include UPPER_CASE constants or simple number/string literals
+            if var_name.chars().all(|c| c.is_uppercase() || c == '_') {
+                return true;
+            }
+            // Or if right side is clearly a primitive (number, string, boolean)
+            if right_side.parse::<f64>().is_ok()
+                || right_side.starts_with('"')
+                || right_side.starts_with("'")
+                || *right_side == "true"
+                || *right_side == "false" {
+                return var_name.chars().all(|c| c.is_uppercase() || c == '_');
+            }
+        }
+    }
+
+    false
+}
+
 /// Extract Python function without @task decorator
 pub fn extract_python_function(source: &str, function_name: &str) -> Option<String> {
     let mut parser = Parser::new();
@@ -130,7 +222,10 @@ pub fn extract_python_function(source: &str, function_name: &str) -> Option<Stri
         match child.kind() {
             "import_statement" | "import_from_statement" => {
                 if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    imports.push(text.to_string());
+                    // Skip sayiir runtime imports (not needed in standalone projects)
+                    if !text.contains("from sayiir") && !text.contains("import sayiir") {
+                        imports.push(text.to_string());
+                    }
                 }
             }
             "class_definition" => {
@@ -143,8 +238,10 @@ pub fn extract_python_function(source: &str, function_name: &str) -> Option<Stri
                 if let Some(assignment) = child.child(0) {
                     if assignment.kind() == "assignment" {
                         if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                            // Include constants (simple assignments at module level)
-                            constants.push(text.to_string());
+                            // Only include simple constants, not workflow definitions or function calls
+                            if is_simple_python_constant(text) {
+                                constants.push(text.to_string());
+                            }
                         }
                     }
                 }
@@ -249,7 +346,7 @@ pub fn extract_javascript_function(source: &str, function_name: &str) -> Option<
 
     // Extract imports, type definitions, constants, and the function
     let mut imports = Vec::new();
-    let mut types = Vec::new();
+    let mut types: Vec<String> = Vec::new();
     let mut constants = Vec::new();
     let mut function_text = None;
 
@@ -257,13 +354,15 @@ pub fn extract_javascript_function(source: &str, function_name: &str) -> Option<
         match child.kind() {
             "import_statement" => {
                 if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    imports.push(text.to_string());
+                    // Skip sayiir runtime imports (not needed in standalone projects)
+                    if !text.contains("from \"sayiir\"") && !text.contains("from 'sayiir'") {
+                        imports.push(text.to_string());
+                    }
                 }
             }
             "interface_declaration" | "type_alias_declaration" => {
-                if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    types.push(text.to_string());
-                }
+                // Skip TypeScript type definitions - not needed in standalone runtime
+                // These are compile-time only and don't exist in JavaScript
             }
             "lexical_declaration" => {
                 // Could be a constant or a task definition
@@ -274,8 +373,8 @@ pub fn extract_javascript_function(source: &str, function_name: &str) -> Option<
                 } else {
                     // Regular constant declaration
                     if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                        // Only include const declarations (not task definitions)
-                        if !text.contains("task(") {
+                        // Only include simple constants, not workflow definitions or runtime code
+                        if is_simple_javascript_constant(text) {
                             constants.push(text.to_string());
                         }
                     }

@@ -231,22 +231,87 @@ tokio = {{ version = "1", features = ["full"] }}
 }
 
 fn generate_rust_main(spec: &OpenFlowSpec) -> Result<String> {
-    let mut code = String::from(
-        r#"use serde_json::Value;
+    use std::collections::HashSet;
 
-"#,
-    );
+    let mut uses = HashSet::new();
+    let mut types = Vec::new();
+    let mut constants = Vec::new();
+    let mut functions = Vec::new();
 
-    // Embed all task functions (already cleaned by Tree-sitter during export)
+    // Parse each task's code to extract use declarations, types, constants, and functions
     for module in &spec.value.modules {
         if let OpenFlowModuleValue::Script {
             code: Some(task_code),
             ..
         } = &module.value
         {
-            code.push_str(task_code);
-            code.push_str("\n\n");
+            let mut current_block = Vec::new();
+            let mut in_item = false;
+
+            for line in task_code.lines() {
+                let trimmed = line.trim();
+
+                if trimmed.starts_with("use ") {
+                    uses.insert(line.to_string());
+                } else if trimmed.starts_with("pub struct ") || trimmed.starts_with("struct ")
+                    || trimmed.starts_with("pub enum ") || trimmed.starts_with("enum ")
+                    || trimmed.starts_with("pub type ") || trimmed.starts_with("type ") {
+                    in_item = true;
+                    current_block = vec![line.to_string()];
+                } else if trimmed.starts_with("pub const ") || trimmed.starts_with("const ")
+                    || trimmed.starts_with("pub static ") || trimmed.starts_with("static ") {
+                    constants.push(line.to_string());
+                } else if trimmed.starts_with("pub async fn ") || trimmed.starts_with("async fn ")
+                    || trimmed.starts_with("pub fn ") || trimmed.starts_with("fn ") {
+                    in_item = true;
+                    current_block = vec![line.to_string()];
+                } else if in_item {
+                    current_block.push(line.to_string());
+                    if trimmed == "}" || (trimmed.ends_with('}') && !trimmed.contains('{')) {
+                        let block = current_block.join("\n");
+                        if block.contains(" fn ") {
+                            functions.push(block);
+                        } else {
+                            types.push(block);
+                        }
+                        in_item = false;
+                    }
+                }
+            }
         }
+    }
+
+    // Build final code with deduplicated use declarations
+    let mut code = String::from("use serde_json::Value;\n\n");
+
+    // Add use declarations (deduplicated, sorted)
+    let mut use_vec: Vec<_> = uses.into_iter().collect();
+    use_vec.sort();
+    for use_decl in use_vec {
+        code.push_str(&use_decl);
+        code.push('\n');
+    }
+    code.push('\n');
+
+    // Add constants
+    if !constants.is_empty() {
+        for constant in constants {
+            code.push_str(&constant);
+            code.push('\n');
+        }
+        code.push('\n');
+    }
+
+    // Add types
+    for type_def in types {
+        code.push_str(&type_def);
+        code.push_str("\n\n");
+    }
+
+    // Add functions
+    for func in functions {
+        code.push_str(&func);
+        code.push_str("\n\n");
     }
 
     // Generate async main function with tokio runtime
@@ -366,6 +431,66 @@ dependencies = [
 }
 
 fn generate_python_main(spec: &OpenFlowSpec) -> Result<String> {
+    use std::collections::HashSet;
+
+    let mut imports = HashSet::new();
+    let mut constants = HashSet::new();
+    let mut classes = HashSet::new();
+    let mut functions = Vec::new();
+
+    // Parse each task's code to extract imports, constants, classes, and functions
+    for module in &spec.value.modules {
+        if let OpenFlowModuleValue::Script {
+            code: Some(task_code),
+            ..
+        } = &module.value
+        {
+            let mut in_class = false;
+            let mut in_function = false;
+            let mut class_lines = Vec::new();
+            let mut function_lines = Vec::new();
+
+            for line in task_code.lines() {
+                let trimmed = line.trim();
+
+                if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
+                    imports.insert(line.to_string());
+                } else if trimmed.starts_with("class ") {
+                    in_class = true;
+                    class_lines = vec![line.to_string()];
+                } else if trimmed.starts_with("def ") {
+                    in_function = true;
+                    function_lines = vec![line.to_string()];
+                } else if in_class {
+                    class_lines.push(line.to_string());
+                    if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
+                        classes.insert(class_lines.join("\n"));
+                        in_class = false;
+                    }
+                } else if in_function {
+                    function_lines.push(line.to_string());
+                    if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
+                        functions.push(function_lines.join("\n"));
+                        in_function = false;
+                    }
+                } else if trimmed.contains('=') && !trimmed.starts_with('@') && !in_class && !in_function {
+                    constants.insert(line.to_string());
+                } else if in_function {
+                    function_lines.push(line.to_string());
+                }
+            }
+
+            // Handle last class/function
+            if in_class {
+                classes.insert(class_lines.join("\n"));
+            }
+            if in_function {
+                functions.push(function_lines.join("\n"));
+            }
+        }
+    }
+
+    // Build final code with deduplicated imports
     let mut code = String::from(
         r#"#!/usr/bin/env python3
 import sys
@@ -374,16 +499,38 @@ import json
 "#,
     );
 
-    // Embed all task functions (already cleaned by Tree-sitter during export)
-    for module in &spec.value.modules {
-        if let OpenFlowModuleValue::Script {
-            code: Some(task_code),
-            ..
-        } = &module.value
-        {
-            code.push_str(task_code);
-            code.push_str("\n\n");
+    // Add imports (deduplicated, sorted)
+    let mut import_vec: Vec<_> = imports.into_iter().collect();
+    import_vec.sort();
+    for import in import_vec {
+        code.push_str(&import);
+        code.push('\n');
+    }
+    code.push('\n');
+
+    // Add constants (deduplicated, sorted)
+    let mut const_vec: Vec<_> = constants.into_iter().collect();
+    const_vec.sort();
+    if !const_vec.is_empty() {
+        for constant in const_vec {
+            code.push_str(&constant);
+            code.push('\n');
         }
+        code.push('\n');
+    }
+
+    // Add classes (deduplicated)
+    let mut class_vec: Vec<_> = classes.into_iter().collect();
+    class_vec.sort();
+    for class in class_vec {
+        code.push_str(&class);
+        code.push_str("\n\n");
+    }
+
+    // Add functions
+    for func in functions {
+        code.push_str(&func);
+        code.push_str("\n\n");
     }
 
     // Generate main
@@ -471,19 +618,57 @@ fn generate_node_package_json(
 }
 
 fn generate_node_main(spec: &OpenFlowSpec) -> Result<String> {
-    let mut code = String::new();
+    use std::collections::HashSet;
 
-    // Embed all task functions (already cleaned by Tree-sitter during export)
+    let mut imports = HashSet::new();
+    let mut constants = HashSet::new();
+    let mut functions = Vec::new();
+
+    // Parse each task's code to extract imports, constants, and functions
     for module in &spec.value.modules {
         if let OpenFlowModuleValue::Script {
             code: Some(task_code),
             ..
         } = &module.value
         {
-            code.push_str(task_code);
-            code.push_str("\n\n");
+            // Split by lines and categorize
+            for line in task_code.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("import ") {
+                    imports.insert(line.to_string());
+                } else if trimmed.starts_with("const ") && !trimmed.contains("function") {
+                    constants.insert(line.to_string());
+                } else if trimmed.starts_with("function ") || (!trimmed.is_empty() && !trimmed.starts_with("import") && !trimmed.starts_with("const")) {
+                    functions.push(line.to_string());
+                }
+            }
         }
     }
+
+    // Build final code with deduplicated imports
+    let mut code = String::new();
+
+    // Add imports (deduplicated)
+    let mut import_vec: Vec<_> = imports.into_iter().collect();
+    import_vec.sort();
+    for import in import_vec {
+        code.push_str(&import);
+        code.push('\n');
+    }
+    code.push('\n');
+
+    // Add constants (deduplicated)
+    let mut const_vec: Vec<_> = constants.into_iter().collect();
+    const_vec.sort();
+    for constant in const_vec {
+        code.push_str(&constant);
+        code.push('\n');
+    }
+    code.push('\n');
+
+    // Add functions
+    code.push_str(&functions.join("\n"));
+    code.push_str("\n\n");
 
     // Generate main
     code.push_str(
