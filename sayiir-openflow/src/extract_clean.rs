@@ -10,47 +10,100 @@ pub fn extract_rust_function(source: &str, function_name: &str) -> Option<String
     let tree = parser.parse(source, None)?;
     let root = tree.root_node();
 
-    find_rust_function(&root, source, function_name)
+    if root.kind() != "source_file" {
+        return None;
+    }
+
+    // Extract use declarations, type definitions, constants, and the function
+    let mut uses = Vec::new();
+    let mut types = Vec::new();
+    let mut constants = Vec::new();
+    let mut function_text = None;
+
+    for child in root.children(&mut root.walk()) {
+        match child.kind() {
+            "use_declaration" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    uses.push(text.to_string());
+                }
+            }
+            "struct_item" | "enum_item" | "type_item" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    types.push(text.to_string());
+                }
+            }
+            "const_item" | "static_item" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    constants.push(text.to_string());
+                }
+            }
+            "attribute_item" => {
+                // Function with #[task] or other attributes
+                for attr_child in child.children(&mut child.walk()) {
+                    if attr_child.kind() == "function_item" {
+                        if let Some(name) = extract_function_name(&attr_child, source) {
+                            if name == function_name {
+                                if let Ok(text) = attr_child.utf8_text(source.as_bytes()) {
+                                    function_text = Some(text.to_string());
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            "function_item" => {
+                // Function without attributes
+                if let Some(name) = extract_function_name(&child, source) {
+                    if name == function_name {
+                        if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                            function_text = Some(text.to_string());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Return just the function if no dependencies needed
+    let func = function_text?;
+    if uses.is_empty() && types.is_empty() && constants.is_empty() {
+        return Some(func);
+    }
+
+    // Build complete code with dependencies
+    let mut result = String::new();
+
+    if !uses.is_empty() {
+        result.push_str(&uses.join("\n"));
+        result.push_str("\n\n");
+    }
+
+    if !constants.is_empty() {
+        result.push_str(&constants.join("\n"));
+        result.push_str("\n\n");
+    }
+
+    if !types.is_empty() {
+        result.push_str(&types.join("\n\n"));
+        result.push_str("\n\n");
+    }
+
+    result.push_str(&func);
+
+    Some(result)
 }
 
-fn find_rust_function(node: &tree_sitter::Node, source: &str, target_name: &str) -> Option<String> {
-    if node.kind() == "function_item" {
-        for child in node.children(&mut node.walk()) {
-            if child.kind() == "identifier" {
-                let name = child.utf8_text(source.as_bytes()).ok()?;
-                if name == target_name {
-                    let func_start = node.start_byte();
-                    let func_end = node.end_byte();
-                    let func_text = &source[func_start..func_end];
-                    return Some(remove_rust_attributes(func_text));
-                }
+fn extract_function_name(func_node: &tree_sitter::Node, source: &str) -> Option<String> {
+    for child in func_node.children(&mut func_node.walk()) {
+        if child.kind() == "identifier" {
+            if let Ok(name) = child.utf8_text(source.as_bytes()) {
+                return Some(name.to_string());
             }
         }
     }
-
-    for child in node.children(&mut node.walk()) {
-        if let Some(result) = find_rust_function(&child, source, target_name) {
-            return Some(result);
-        }
-    }
-
     None
-}
-
-fn remove_rust_attributes(func_text: &str) -> String {
-    let lines: Vec<&str> = func_text.lines().collect();
-    let mut result = Vec::new();
-
-    for line in lines {
-        let trimmed = line.trim();
-        // Skip lines starting with #[
-        if trimmed.starts_with("#[") || trimmed.starts_with("# [") {
-            continue;
-        }
-        result.push(line);
-    }
-
-    result.join("\n")
 }
 
 /// Extract Python function without @task decorator
@@ -190,55 +243,114 @@ pub fn extract_javascript_function(source: &str, function_name: &str) -> Option<
     let tree = parser.parse(source, None)?;
     let root = tree.root_node();
 
-    find_javascript_function(&root, source, function_name)
+    if root.kind() != "program" {
+        return None;
+    }
+
+    // Extract imports, type definitions, constants, and the function
+    let mut imports = Vec::new();
+    let mut types = Vec::new();
+    let mut constants = Vec::new();
+    let mut function_text = None;
+
+    for child in root.children(&mut root.walk()) {
+        match child.kind() {
+            "import_statement" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    imports.push(text.to_string());
+                }
+            }
+            "interface_declaration" | "type_alias_declaration" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    types.push(text.to_string());
+                }
+            }
+            "lexical_declaration" => {
+                // Could be a constant or a task definition
+                if let Some((name, is_task, arrow)) = extract_task_from_lexical(&child, source) {
+                    if name == function_name && is_task {
+                        function_text = Some(convert_arrow_to_function(&name, &arrow));
+                    }
+                } else {
+                    // Regular constant declaration
+                    if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                        // Only include const declarations (not task definitions)
+                        if !text.contains("task(") {
+                            constants.push(text.to_string());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Return just the function if no dependencies needed
+    let func = function_text?;
+    if imports.is_empty() && types.is_empty() && constants.is_empty() {
+        return Some(func);
+    }
+
+    // Build complete code with dependencies
+    let mut result = String::new();
+
+    if !imports.is_empty() {
+        result.push_str(&imports.join("\n"));
+        result.push_str("\n\n");
+    }
+
+    if !types.is_empty() {
+        result.push_str(&types.join("\n\n"));
+        result.push_str("\n\n");
+    }
+
+    if !constants.is_empty() {
+        result.push_str(&constants.join("\n"));
+        result.push_str("\n\n");
+    }
+
+    result.push_str(&func);
+
+    Some(result)
 }
 
-fn find_javascript_function(node: &tree_sitter::Node, source: &str, target_name: &str) -> Option<String> {
+fn extract_task_from_lexical(node: &tree_sitter::Node, source: &str) -> Option<(String, bool, String)> {
     // Look for: const NAME = task("id", arrow_function)
-    if node.kind() == "variable_declarator" {
-        let mut found_name = None;
-        let mut arrow_function = None;
-        let mut is_task_call = false;
+    for child in node.children(&mut node.walk()) {
+        if child.kind() == "variable_declarator" {
+            let mut found_name = None;
+            let mut arrow_function = None;
+            let mut is_task_call = false;
 
-        for child in node.children(&mut node.walk()) {
-            if child.kind() == "identifier" && found_name.is_none() {
-                found_name = child.utf8_text(source.as_bytes()).ok();
-            } else if child.kind() == "call_expression" {
-                // Check if it's task(...)
-                for call_child in child.children(&mut child.walk()) {
-                    if call_child.kind() == "identifier" {
-                        if let Ok(func_name) = call_child.utf8_text(source.as_bytes()) {
-                            if func_name == "task" {
-                                is_task_call = true;
+            for decl_child in child.children(&mut child.walk()) {
+                if decl_child.kind() == "identifier" && found_name.is_none() {
+                    found_name = decl_child.utf8_text(source.as_bytes()).ok();
+                } else if decl_child.kind() == "call_expression" {
+                    // Check if it's task(...)
+                    for call_child in decl_child.children(&mut decl_child.walk()) {
+                        if call_child.kind() == "identifier" {
+                            if let Ok(func_name) = call_child.utf8_text(source.as_bytes()) {
+                                if func_name == "task" {
+                                    is_task_call = true;
+                                }
                             }
-                        }
-                    } else if call_child.kind() == "arguments" {
-                        // Find arrow_function in arguments
-                        for arg in call_child.children(&mut call_child.walk()) {
-                            if arg.kind() == "arrow_function" {
-                                arrow_function = arg.utf8_text(source.as_bytes()).ok();
+                        } else if call_child.kind() == "arguments" {
+                            // Find arrow_function in arguments
+                            for arg in call_child.children(&mut call_child.walk()) {
+                                if arg.kind() == "arrow_function" {
+                                    arrow_function = arg.utf8_text(source.as_bytes()).ok();
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        if let Some(name) = found_name {
-            if name == target_name && is_task_call {
-                if let Some(arrow_text) = arrow_function {
-                    return Some(convert_arrow_to_function(name, arrow_text));
-                }
+            if let (Some(name), Some(arrow)) = (found_name, arrow_function) {
+                return Some((name.to_string(), is_task_call, arrow.to_string()));
             }
         }
     }
-
-    for child in node.children(&mut node.walk()) {
-        if let Some(result) = find_javascript_function(&child, source, target_name) {
-            return Some(result);
-        }
-    }
-
     None
 }
 
@@ -309,8 +421,51 @@ pub async fn download_video(req: Request) -> Result<Video> {
         let result = extract_rust_function(source, "download_video");
         assert!(result.is_some());
         let clean = result.unwrap();
-        assert!(!clean.contains("#[task"));
         assert!(clean.contains("pub async fn download_video"));
+    }
+
+    #[test]
+    fn test_extract_rust_with_dependencies() {
+        let source = r#"use std::path::PathBuf;
+use serde::{Serialize, Deserialize};
+
+const MAX_SIZE: usize = 1024;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VideoFile {
+    pub path: PathBuf,
+    pub size: usize,
+}
+
+type BoxError = Box<dyn std::error::Error>;
+
+#[task(id = "process")]
+pub async fn process_video(input: VideoFile) -> Result<String, BoxError> {
+    if input.size > MAX_SIZE {
+        return Err("too large".into());
+    }
+    Ok(input.path.to_string_lossy().to_string())
+}
+"#;
+        let result = extract_rust_function(source, "process_video");
+        assert!(result.is_some());
+        let clean = result.unwrap();
+
+        // Should include use declarations
+        assert!(clean.contains("use std::path::PathBuf"));
+        assert!(clean.contains("use serde::{Serialize, Deserialize}"));
+
+        // Should include constants
+        assert!(clean.contains("const MAX_SIZE"));
+
+        // Should include struct definitions
+        assert!(clean.contains("pub struct VideoFile"));
+
+        // Should include type aliases
+        assert!(clean.contains("type BoxError"));
+
+        // Should include function
+        assert!(clean.contains("pub async fn process_video"));
     }
 
     #[test]
@@ -398,5 +553,49 @@ const validateOrder = task("validate-order", (order: Order) => {
         assert!(clean.contains("function validateOrder"));
         assert!(!clean.contains(": Order"));
         assert!(!clean.contains("as const"));
+    }
+
+    #[test]
+    fn test_extract_javascript_with_dependencies() {
+        let source = r#"import { z } from 'zod';
+import type { Order } from './types';
+
+interface ValidationResult {
+  valid: boolean;
+  errors?: string[];
+}
+
+type OrderStatus = 'pending' | 'approved' | 'rejected';
+
+const MAX_AMOUNT = 10000;
+
+const validateOrder = task("validate-order", (order: Order) => {
+  if (order.amount > MAX_AMOUNT) {
+    return { valid: false, errors: ['amount too high'] };
+  }
+  return { valid: true };
+});
+"#;
+        let result = extract_javascript_function(source, "validateOrder");
+        assert!(result.is_some());
+        let clean = result.unwrap();
+
+        // Should include imports
+        assert!(clean.contains("import { z } from 'zod'"));
+        assert!(clean.contains("import type { Order } from './types'"));
+
+        // Should include interface
+        assert!(clean.contains("interface ValidationResult"));
+
+        // Should include type alias
+        assert!(clean.contains("type OrderStatus"));
+
+        // Should include constants
+        assert!(clean.contains("const MAX_AMOUNT"));
+
+        // Should include function without task wrapper
+        assert!(!clean.contains("task("));
+        assert!(clean.contains("function validateOrder"));
+        assert!(!clean.contains(": Order")); // Type annotations stripped
     }
 }

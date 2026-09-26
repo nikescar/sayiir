@@ -12,15 +12,14 @@ pub fn extract_all_node_tasks(source: &str) -> Result<Vec<TaskSource>> {
     for cap in re.captures_iter(source) {
         let var_name = cap.get(1).unwrap().as_str();
         let task_id = cap.get(2).unwrap().as_str();
-        let task_start = cap.get(0).unwrap().start();
 
-        if let Ok(task_source) = extract_task_body(source, task_start) {
-            tasks.push(TaskSource {
-                id: task_id.to_string(),
-                entry_point: var_name.to_string(),
-                source_code: task_source,
-            });
-        }
+        // Store the full file source instead of just the task body
+        // This allows extract_clean to extract imports, types, and constants
+        tasks.push(TaskSource {
+            id: task_id.to_string(),
+            entry_point: var_name.to_string(),
+            source_code: source.to_string(),
+        });
     }
 
     Ok(tasks)

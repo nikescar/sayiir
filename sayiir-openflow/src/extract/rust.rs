@@ -63,11 +63,12 @@ pub fn extract_all_rust_tasks(source: &str) -> Result<Vec<TaskSource>> {
         if let Item::Fn(func) = item {
             if let Some(task_id) = get_task_id(&func.attrs, &func.sig.ident) {
                 let entry_point = func.sig.ident.to_string();
-                let source_code = func.to_token_stream().to_string();
 
+                // Store the full file source instead of just the function
+                // This allows extract_clean to extract use declarations, types, and constants
                 tasks.push(TaskSource {
                     id: task_id,
-                    source_code,
+                    source_code: source.to_string(),
                     entry_point,
                 });
             }
