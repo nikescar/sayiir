@@ -1,3 +1,4 @@
+%%% Summary: order-processing
 flowchart TD
     validate-order[validate-order]
     send-confirmation[send-confirmation]
@@ -5,29 +6,20 @@ flowchart TD
 
 %%% validate-order (node)
 %%% Entry: validateOrder
-%%% Dependencies: {"sayiir":"latest"}
+%%% Dependencies: {}
 ```node
-import { createServer } from "node:http";
-
-const PORT = 3000;
-
 function validateOrder(order) {
   if (order.amount <= 0) throw new Error("Invalid amount");
   if (!order.customerEmail) throw new Error("Missing customer email");
-  return { ...order, validated: true };
+  return { amount: order.amount, customerEmail: order.customerEmail, validated: true };
 }
 ```
 
 %%% send-confirmation (node)
 %%% Entry: sendConfirmation
-%%% Dependencies: {"sayiir":"latest"}
+%%% Dependencies: {}
 ```node
-import { createServer } from "node:http";
-
-const PORT = 3000;
-
-function sendConfirmation(shipment) {
-    // In production: send email via SendGrid, Postmark, etc.
-    return `Order shipped via ${shipment.carrier}, tracking: ${shipment.trackingNumber}`;
-  }
+function sendConfirmation(order) {
+  return "Order confirmed for " + order.customerEmail + ", amount: $" + order.amount;
+}
 ```

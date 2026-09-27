@@ -314,6 +314,24 @@ pub fn export_openflow_json(spec: &OpenFlowSpec) -> Result<String> {
 pub fn import_mermaid(markdown: &str) -> Result<OpenFlowSpec> {
     use std::collections::HashMap;
 
+    // Parse workflow summary if present
+    let mut summary = "Imported from Mermaid".to_string();
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("%%% Summary:") {
+            summary = trimmed
+                .strip_prefix("%%% Summary:")
+                .unwrap()
+                .trim()
+                .to_string();
+            break;
+        }
+        // Stop at flowchart declaration
+        if trimmed.starts_with("flowchart") {
+            break;
+        }
+    }
+
     // Parse flowchart nodes first (preserving order)
     let mut modules: Vec<OpenFlowModule> = Vec::new();
     let mut module_indices: HashMap<String, usize> = HashMap::new();
@@ -433,7 +451,7 @@ pub fn import_mermaid(markdown: &str) -> Result<OpenFlowSpec> {
     }
 
     Ok(OpenFlowSpec {
-        summary: "Imported from Mermaid".to_string(),
+        summary,
         value: OpenFlowValue { modules },
     })
 }
@@ -481,7 +499,11 @@ fn parse_task_metadata(line: &str) -> Option<(String, String)> {
 
 /// Export OpenFlowSpec to Mermaid markdown
 pub fn export_mermaid(spec: &OpenFlowSpec) -> Result<String> {
-    let mut mermaid = String::from("flowchart TD\n");
+    let mut mermaid = String::new();
+
+    // Add summary comment
+    mermaid.push_str(&format!("%%% Summary: {}\n", spec.summary));
+    mermaid.push_str("flowchart TD\n");
 
     // Generate flowchart nodes
     for module in &spec.value.modules {

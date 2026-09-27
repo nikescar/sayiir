@@ -1,3 +1,4 @@
+%%% Summary: welcome
 flowchart TD
     fetch-user[fetch-user]
     send-email[send-email]
@@ -5,18 +6,18 @@ flowchart TD
 
 %%% fetch-user (node)
 %%% Entry: fetchUser
-%%% Dependencies: {"sayiir":"latest"}
+%%% Dependencies: {}
 ```node
 function fetchUser(id) {
-  return { id, name: "Alice" };
+  return { id: id, name: "Alice" };
 }
 ```
 
 %%% send-email (node)
 %%% Entry: sendEmail
-%%% Dependencies: {"sayiir":"latest"}
+%%% Dependencies: {}
 ```node
 function sendEmail(user) {
-  return `Sent welcome to ${user.name}`;
+  return "Sent welcome to " + user.name;
 }
 ```
