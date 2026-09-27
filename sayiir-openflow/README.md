@@ -158,6 +158,64 @@ Auto-detects language from project structure (Cargo.toml, *.py, package.json).
 - Flowchart diagram of workflow structure
 - Human-readable documentation format
 
+## Tree-sitter Extraction Limitations
+
+The export command uses Tree-sitter to extract clean, portable code from tasks. Below are language-specific limitations:
+
+### Rust
+
+**Supported:**
+- Extracts functions with or without `#[task]` attributes
+- Includes `use` declarations, type definitions, constants, helper functions, and `impl` blocks
+- Cross-module type resolution for `use crate::module::*` glob imports
+
+**Excluded:**
+- Sayiir runtime imports (`sayiir_runtime`, `sayiir_core`, `sayiir::`, `sayiir_persistence`)
+- Test functions (`#[test]`, `#[cfg(test)]`)
+- Sayiir-specific derive macros and impls
+
+**Cross-module types:**
+- Only resolves types from `crate::*` glob imports
+- Requires `project_dir` to access source files
+- Does not extract types from external crate dependencies
+
+### Python
+
+**Supported:**
+- Extracts functions with or without `@task` decorators (decorator is stripped)
+- Includes imports, class definitions, and simple constants
+
+**Excluded:**
+- Sayiir imports (`from sayiir`, `import sayiir`)
+- Workflow definitions (`Flow(...)`, `flow(...)`)
+- Function call assignments (e.g., `result = calculate()`)
+- Runtime execution code (`run_workflow`, `runDurableWorkflow`)
+
+**Constants:**
+- Only includes simple assignments (primitives, `Path("...")`)
+- Skips object instantiation, function calls, and complex expressions
+
+### Node.js / TypeScript
+
+**Supported:**
+- Extracts task functions (converts arrow functions to regular functions)
+- Includes imports and simple constants (UPPER_CASE or primitives)
+
+**Excluded:**
+- Sayiir imports (`from "sayiir"`, `from 'sayiir'`)
+- TypeScript type definitions (`interface`, `type` aliases) — compile-time only, not needed in runtime JavaScript
+- Type-only imports (`import type`)
+- Task wrapper calls (`task(...)` stripped from output)
+- Workflow definitions (`flow(...)`, `branch(...)`)
+- Object instantiation (`new ...`)
+- Object literals and function call assignments
+- Runtime execution code
+
+**Output format:**
+- Produces runtime JavaScript, not TypeScript
+- Type annotations are stripped (e.g., `: Order` removed)
+- Arrow functions converted to named functions
+
 ## License
 
 MIT
