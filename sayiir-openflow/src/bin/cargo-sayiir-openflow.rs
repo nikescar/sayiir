@@ -308,7 +308,7 @@ fn export_workflow(
     }
 
     if matches!(format, Format::Mermaid | Format::Both) {
-        let mermaid = generate_mermaid_stub(&spec);
+        let mermaid = export_mermaid(&spec)?;
         if !dry_run {
             std::fs::write(&mermaid_output, &mermaid).map_err(|e| {
                 error::ExportError::FileWriteError {
@@ -324,27 +324,6 @@ fn export_workflow(
     }
 
     Ok(())
-}
-
-fn generate_mermaid_stub(spec: &OpenFlowSpec) -> String {
-    // Stub implementation for Mermaid export
-    // TODO: Implement proper Mermaid flowchart generation in Task 8
-    let mut mermaid = String::from("flowchart TD\n");
-    mermaid.push_str(&format!("    Start[{}]\n", spec.summary));
-    for (i, module) in spec.value.modules.iter().enumerate() {
-        mermaid.push_str(&format!("    Task{}[{}]\n", i, module.id));
-        if i == 0 {
-            mermaid.push_str(&format!("    Start --> Task{}\n", i));
-        } else {
-            mermaid.push_str(&format!("    Task{} --> Task{}\n", i - 1, i));
-        }
-    }
-    if !spec.value.modules.is_empty() {
-        mermaid.push_str(&format!("    Task{} --> End[Done]\n", spec.value.modules.len() - 1));
-    } else {
-        mermaid.push_str("    Start --> End[Done]\n");
-    }
-    mermaid
 }
 
 async fn import_workflow_cmd(input: PathBuf, output_dir: PathBuf) -> error::ExportResult<()> {

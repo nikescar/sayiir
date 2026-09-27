@@ -1,7 +1,22 @@
 flowchart TD
-    Start[welcome]
-    Task0[fetch-user]
-    Start --> Task0
-    Task1[send-email]
-    Task0 --> Task1
-    Task1 --> End[Done]
+    fetch-user[fetch-user]
+    send-email[send-email]
+    fetch-user --> send-email
+
+%%% fetch-user (node)
+%%% Entry: fetchUser
+%%% Dependencies: {"sayiir":"latest"}
+```node
+function fetchUser(id) {
+  return { id, name: "Alice" };
+}
+```
+
+%%% send-email (node)
+%%% Entry: sendEmail
+%%% Dependencies: {"sayiir":"latest"}
+```node
+function sendEmail(user) {
+  return `Sent welcome to ${user.name}`;
+}
+```
