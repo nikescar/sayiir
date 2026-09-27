@@ -746,7 +746,7 @@ pub async fn download_video(req: Request) -> Result<Video> {
     Ok(Video {})
 }
 "#;
-        let result = extract_rust_function(source, "download_video");
+        let result = extract_rust_function(source, "download_video", None);
         assert!(result.is_some());
         let clean = result.unwrap();
         assert!(clean.contains("pub async fn download_video"));
@@ -775,7 +775,7 @@ pub async fn process_video(input: VideoFile) -> Result<String, BoxError> {
     Ok(input.path.to_string_lossy().to_string())
 }
 "#;
-        let result = extract_rust_function(source, "process_video");
+        let result = extract_rust_function(source, "process_video", None);
         assert!(result.is_some());
         let clean = result.unwrap();
 
@@ -803,7 +803,7 @@ pub async fn process_video(input: VideoFile) -> Result<String, BoxError> {
 def parse_query(raw: dict) -> dict:
     return raw
 "#;
-        let result = extract_python_function(source, "parse_query");
+        let result = extract_python_function(source, "parse_query", None);
         assert!(result.is_some());
         let clean = result.unwrap();
         assert!(!clean.contains("@task"));
@@ -825,7 +825,7 @@ def parse_query(raw: dict) -> dict:
     query = ResearchQuery.model_validate(raw)
     return query.model_dump()
 "#;
-        let result = extract_python_function(source, "parse_query");
+        let result = extract_python_function(source, "parse_query", None);
         assert!(result.is_some());
         let clean = result.unwrap();
 
@@ -855,7 +855,7 @@ def process_data(raw: dict) -> dict:
     model = MyModel(raw["value"])
     return {"result": model.value}
 "#;
-        let result = extract_python_function(source, "process_data");
+        let result = extract_python_function(source, "process_data", None);
         assert!(result.is_some());
         let clean = result.unwrap();
 
@@ -874,7 +874,7 @@ const validateOrder = task("validate-order", (order: Order) => {
   return { validated: true as const };
 });
 "#;
-        let result = extract_javascript_function(source, "validateOrder");
+        let result = extract_javascript_function(source, "validateOrder", None);
         assert!(result.is_some());
         let clean = result.unwrap();
         assert!(!clean.contains("task("));
@@ -904,7 +904,7 @@ const validateOrder = task("validate-order", (order: Order) => {
   return { valid: true };
 });
 "#;
-        let result = extract_javascript_function(source, "validateOrder");
+        let result = extract_javascript_function(source, "validateOrder", None);
         assert!(result.is_some());
         let clean = result.unwrap();
 
