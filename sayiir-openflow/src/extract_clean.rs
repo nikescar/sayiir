@@ -908,15 +908,14 @@ const validateOrder = task("validate-order", (order: Order) => {
         assert!(result.is_some());
         let clean = result.unwrap();
 
-        // Should include imports
+        // Should include imports (excluding type-only imports)
         assert!(clean.contains("import { z } from 'zod'"));
-        assert!(clean.contains("import type { Order } from './types'"));
+        // Note: "import type" is TypeScript-only and intentionally excluded
 
-        // Should include interface
-        assert!(clean.contains("interface ValidationResult"));
-
-        // Should include type alias
-        assert!(clean.contains("type OrderStatus"));
+        // TypeScript type definitions are intentionally excluded (runtime JS doesn't need them)
+        // The extraction produces portable runtime JavaScript, not TypeScript
+        assert!(!clean.contains("interface ValidationResult"));
+        assert!(!clean.contains("type OrderStatus"));
 
         // Should include constants
         assert!(clean.contains("const MAX_AMOUNT"));
