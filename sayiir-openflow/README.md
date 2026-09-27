@@ -10,11 +10,20 @@ cd sayiir-openflow
 cargo install --path . --bin cargo-sayiir-openflow
 ```
 
-**Option 2: With Brimstone JavaScript execution (optional)**
+**Option 2: With JavaScript execution (optional)**
 ```bash
 cd sayiir-openflow
-cargo install --path . --bin cargo-sayiir-openflow --features brimstone
+cargo install --path . --bin cargo-sayiir-openflow --features javascript
 ```
+
+**Platform Requirements for JavaScript Feature:**
+- **Linux/macOS/Windows**: No additional setup required
+- **OpenBSD**: Set `LIBCLANG_PATH` before building:
+  ```bash
+  export LIBCLANG_PATH=/usr/local/llvm22/lib
+  cargo install --path . --bin cargo-sayiir-openflow --features javascript
+  ```
+- **Android**: Requires NDK with clang/LLVM toolchain
 
 **Option 3: Manual build and copy**
 ```bash
@@ -25,8 +34,8 @@ cp target/release/cargo-sayiir-openflow ~/.cargo/bin/
 **Option 4: Install from crates.io** (when published)
 ```bash
 cargo install sayiir-openflow
-# Or with Brimstone
-cargo install sayiir-openflow --features brimstone
+# Or with JavaScript execution
+cargo install sayiir-openflow --features javascript
 ```
 
 After installation, verify with:
@@ -106,11 +115,11 @@ my-workflow/
 └── README.md
 ```
 
-### Run Command (Brimstone Feature Only)
+### Run Command (JavaScript Feature)
 
-**⚠️ Requires `--features brimstone` during installation**
+**⚠️ Requires `--features javascript` during installation**
 
-Execute pure JavaScript workflows directly using the Brimstone interpreter:
+Execute pure JavaScript workflows directly using the rquickjs interpreter:
 
 ```bash
 # Run pure JavaScript workflow with JSON input
@@ -128,15 +137,16 @@ cargo-sayiir-openflow sayiir-openflow run workflow.json
 - ❌ JavaScript with dependencies not supported
 
 **Features:**
-- Lightweight Brimstone interpreter (no Node.js required)
-- ~97% ECMAScript conformance (test262)
+- Lightweight QuickJS interpreter (no Node.js required)
+- Full ECMAScript 2020 support
 - Chains task outputs → inputs sequentially
 - Returns final result as JSON
 
-**Why Brimstone?**
-- Fast execution for dependency-free JavaScript
+**Why rquickjs?**
+- Battle-tested QuickJS bindings for Rust
+- Cross-platform (Windows, Linux, macOS, OpenBSD, Android)
 - Compact binary footprint
-- Standard-conforming ECMAScript implementation
+- Production-ready with active maintenance
 - No external runtime dependencies
 
 ## Cargo Plugin Usage
@@ -152,7 +162,7 @@ cargo sayiir-openflow export
 cargo sayiir-openflow import workflow.json --output-dir ./imported
 cd imported && cargo run
 
-# Run pure JavaScript workflow (requires brimstone feature)
+# Run pure JavaScript workflow (requires javascript feature)
 cargo sayiir-openflow run workflow.json --input '{"value": 42}'
 ```
 
@@ -255,23 +265,23 @@ cargo run --example export_javascript
 cargo run --example import_workflow
 ```
 
-### Brimstone Execution Example
+### JavaScript Execution Example
 ```bash
-# Run pure JavaScript workflow with Brimstone (requires feature)
-cargo run --example brimstone_run --features brimstone
+# Run pure JavaScript workflow with rquickjs (requires feature)
+cargo run --example javascript_run --features javascript
 ```
 
 ## Feature Flags
 
 | Feature | Description | Default |
 |---------|-------------|---------|
-| `brimstone` | Enables JavaScript execution via Brimstone interpreter | ❌ Disabled |
+| `javascript` | Enables JavaScript execution via rquickjs (QuickJS) interpreter | ❌ Disabled |
 
-**Enable Brimstone:**
+**Enable JavaScript execution:**
 ```bash
-cargo install --path . --features brimstone
+cargo install --path . --features javascript
 # Or in Cargo.toml
-sayiir-openflow = { version = "1.0", features = ["brimstone"] }
+sayiir-openflow = { version = "1.0", features = ["javascript"] }
 ```
 
 ## License

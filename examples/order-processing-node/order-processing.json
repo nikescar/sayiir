@@ -1,0 +1,33 @@
+{
+  "summary": "order-processing",
+  "value": {
+    "modules": [
+      {
+        "id": "validate-order",
+        "value": {
+          "type": "script",
+          "path": "validateOrder",
+          "language": "node",
+          "entry_point": "validateOrder",
+          "code": "import { createServer } from \"node:http\";\n\nconst PORT = 3000;\n\nfunction validateOrder(order) {\n  if (order.amount <= 0) throw new Error(\"Invalid amount\");\n  if (!order.customerEmail) throw new Error(\"Missing customer email\");\n  return { ...order, validated: true };\n}",
+          "dependencies": {
+            "sayiir": "latest"
+          }
+        }
+      },
+      {
+        "id": "send-confirmation",
+        "value": {
+          "type": "script",
+          "path": "sendConfirmation",
+          "language": "node",
+          "entry_point": "sendConfirmation",
+          "code": "import { createServer } from \"node:http\";\n\nconst PORT = 3000;\n\nfunction sendConfirmation(shipment) {\n    // In production: send email via SendGrid, Postmark, etc.\n    return `Order shipped via ${shipment.carrier}, tracking: ${shipment.trackingNumber}`;\n  }",
+          "dependencies": {
+            "sayiir": "latest"
+          }
+        }
+      }
+    ]
+  }
+}

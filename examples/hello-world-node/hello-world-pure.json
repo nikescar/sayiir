@@ -1,0 +1,27 @@
+{
+  "summary": "welcome",
+  "value": {
+    "modules": [
+      {
+        "id": "fetch-user",
+        "value": {
+          "type": "script",
+          "path": "fetchUser",
+          "language": "node",
+          "entry_point": "fetchUser",
+          "code": "function fetchUser(id) {\n  return { id: id, name: \"Alice\" };\n}"
+        }
+      },
+      {
+        "id": "send-email",
+        "value": {
+          "type": "script",
+          "path": "sendEmail",
+          "language": "node",
+          "entry_point": "sendEmail",
+          "code": "function sendEmail(user) {\n  return \"Sent welcome to \" + user.name;\n}"
+        }
+      }
+    ]
+  }
+}

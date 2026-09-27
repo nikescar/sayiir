@@ -1,12 +1,13 @@
-//! Run pure JavaScript workflow with Brimstone interpreter
+//! Run pure JavaScript workflow with rquickjs interpreter
 //!
-//! Run: cargo run --example brimstone_run --features brimstone
+//! Run: cargo run --example javascript_run --features javascript
 
-#[cfg(feature = "brimstone")]
+#[cfg(feature = "javascript")]
 fn main() -> sayiir_openflow::Result<()> {
     use sayiir_openflow::*;
+    use std::collections::HashMap;
 
-    println!("Running JavaScript workflow with Brimstone interpreter...\n");
+    println!("Running JavaScript workflow with rquickjs interpreter...\n");
 
     // Create a pure JavaScript workflow (no external dependencies)
     let tasks = vec![
@@ -15,14 +16,14 @@ fn main() -> sayiir_openflow::Result<()> {
             language: Language::Node,
             source_code: "function double(x) { return x * 2; }".to_string(),
             entry_point: "double".to_string(),
-            dependencies: serde_json::Map::new(),
+            dependencies: HashMap::new(),
         },
         TaskMetadata {
             id: "add_ten".to_string(),
             language: Language::Node,
             source_code: "function addTen(x) { return x + 10; }".to_string(),
             entry_point: "addTen".to_string(),
-            dependencies: serde_json::Map::new(),
+            dependencies: HashMap::new(),
         },
         TaskMetadata {
             id: "format".to_string(),
@@ -37,21 +38,21 @@ function format(x) {
 "#
             .to_string(),
             entry_point: "format".to_string(),
-            dependencies: serde_json::Map::new(),
+            dependencies: HashMap::new(),
         },
     ];
 
-    let spec = build_openflow_spec("Brimstone Example".to_string(), tasks);
+    let spec = build_openflow_spec("rquickjs Example".to_string(), tasks);
 
     // Validate (must be pure JavaScript with no dependencies)
     println!("→ Validating workflow...");
-    brimstone::validate_pure_javascript(&spec)?;
+    javascript::validate_pure_javascript(&spec)?;
     println!("✓ Validation passed\n");
 
     // Run workflow: 5 → double → 10 → add_ten → 20 → format → { value: 20, ... }
     println!("→ Running workflow with input: 5");
     let input = serde_json::json!(5);
-    let result = brimstone::run_workflow(&spec, input)?;
+    let result = javascript::run_workflow(&spec, input)?;
 
     println!("\n✓ Workflow completed:");
     println!("{}", serde_json::to_string_pretty(&result)?);
@@ -59,9 +60,9 @@ function format(x) {
     Ok(())
 }
 
-#[cfg(not(feature = "brimstone"))]
+#[cfg(not(feature = "javascript"))]
 fn main() {
-    eprintln!("Error: This example requires the 'brimstone' feature");
-    eprintln!("Run with: cargo run --example brimstone_run --features brimstone");
+    eprintln!("Error: This example requires the 'javascript' feature");
+    eprintln!("Run with: cargo run --example javascript_run --features javascript");
     std::process::exit(1);
 }

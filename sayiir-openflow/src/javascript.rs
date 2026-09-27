@@ -1,23 +1,22 @@
-//! Brimstone JavaScript execution for dependency-free workflows
+//! JavaScript execution for dependency-free workflows using rquickjs
 
 use crate::{OpenFlowError, OpenFlowSpec, Result};
-use brimstone_core::Context;
+use rquickjs::{Context, Runtime};
 use serde_json::Value;
 
 /// Validate that workflow is pure JavaScript with no external dependencies
 pub fn validate_pure_javascript(spec: &OpenFlowSpec) -> Result<()> {
     for module in &spec.value.modules {
-        // Check language
-        let language = module
-            .value
-            .as_script()
-            .and_then(|s| s.language.as_deref())
-            .ok_or_else(|| {
-                OpenFlowError::InvalidWorkflow(format!(
-                    "module '{}': missing language field",
-                    module.id
-                ))
-            })?;
+        let script = module.value.as_script().ok_or_else(|| {
+            OpenFlowError::InvalidWorkflow(format!("module '{}': not a script", module.id))
+        })?;
+
+        let language = script.language.as_deref().ok_or_else(|| {
+            OpenFlowError::InvalidWorkflow(format!(
+                "module '{}': missing language field",
+                module.id
+            ))
+        })?;
 
         if language != "node" {
             return Err(OpenFlowError::InvalidWorkflow(format!(
@@ -26,29 +25,28 @@ pub fn validate_pure_javascript(spec: &OpenFlowSpec) -> Result<()> {
             )));
         }
 
-        // Check for external dependencies
-        if let Some(script) = module.value.as_script() {
-            if let Some(deps) = &script.dependencies {
-                if !deps.is_empty() {
-                    return Err(OpenFlowError::InvalidWorkflow(format!(
-                        "Run command does not support external dependencies (module '{}' has {} dependencies)",
-                        module.id,
-                        deps.len()
-                    )));
-                }
+        if let Some(deps) = &script.dependencies {
+            if !deps.is_empty() {
+                return Err(OpenFlowError::InvalidWorkflow(format!(
+                    "Run command does not support external dependencies (module '{}' has {} dependencies)",
+                    module.id,
+                    deps.len()
+                )));
             }
         }
     }
     Ok(())
 }
 
-/// Execute pure JavaScript workflow using Brimstone interpreter
+/// Execute pure JavaScript workflow using rquickjs
 pub fn run_workflow(spec: &OpenFlowSpec, input: Value) -> Result<Value> {
-    // Validate first
     validate_pure_javascript(spec)?;
 
-    // Initialize Brimstone context
-    let mut context = Context::new();
+    let runtime = Runtime::new()
+        .map_err(|e| OpenFlowError::ExecutionError(format!("Failed to create runtime: {}", e)))?;
+    let context = Context::full(&runtime)
+        .map_err(|e| OpenFlowError::ExecutionError(format!("Failed to create context: {}", e)))?;
+
     let mut current_input = input;
 
     for module in &spec.value.modules {
@@ -64,7 +62,6 @@ pub fn run_workflow(spec: &OpenFlowSpec, input: Value) -> Result<Value> {
             OpenFlowError::InvalidWorkflow(format!("module '{}': missing entry_point", module.id))
         })?;
 
-        // Wrap task code with input/output handling
         let input_json = serde_json::to_string(&current_input)
             .map_err(|e| OpenFlowError::InvalidWorkflow(format!("failed to serialize input: {}", e)))?;
 
@@ -72,7 +69,6 @@ pub fn run_workflow(spec: &OpenFlowSpec, input: Value) -> Result<Value> {
             r#"
 {code}
 
-// Execute task and return JSON result
 (function() {{
     const input = {input_json};
     const result = {entry_point}(input);
@@ -81,13 +77,16 @@ pub fn run_workflow(spec: &OpenFlowSpec, input: Value) -> Result<Value> {
 "#
         );
 
-        // Execute with Brimstone
-        let result = context.eval(&wrapped_code).map_err(|e| {
-            OpenFlowError::ExecutionError(format!("Brimstone execution failed in module '{}': {:?}", module.id, e))
-        })?;
+        let result_str = context
+            .with(|ctx| {
+                ctx.eval::<String, _>(wrapped_code.as_bytes())
+                    .map_err(|e| OpenFlowError::ExecutionError(format!(
+                        "JavaScript execution failed in module '{}': {}",
+                        module.id,
+                        e
+                    )))
+            })?;
 
-        // Parse result as JSON
-        let result_str = result.to_string();
         current_input = serde_json::from_str(&result_str).map_err(|e| {
             OpenFlowError::ExecutionError(format!(
                 "Failed to parse task output as JSON: {}. Output: {}",
@@ -121,6 +120,7 @@ mod tests {
                 modules: vec![OpenFlowModule {
                     id: "task1".to_string(),
                     value: OpenFlowModuleValue::Script {
+                        path: "task1".to_string(),
                         language: Some(language.to_string()),
                         code: Some("function task1(x) { return x; }".to_string()),
                         entry_point: Some("task1".to_string()),
@@ -174,6 +174,7 @@ mod tests {
                 modules: vec![OpenFlowModule {
                     id: "double".to_string(),
                     value: OpenFlowModuleValue::Script {
+                        path: "double".to_string(),
                         language: Some("node".to_string()),
                         code: Some("function double(x) { return x * 2; }".to_string()),
                         entry_point: Some("double".to_string()),
@@ -196,6 +197,7 @@ mod tests {
                     OpenFlowModule {
                         id: "double".to_string(),
                         value: OpenFlowModuleValue::Script {
+                            path: "double".to_string(),
                             language: Some("node".to_string()),
                             code: Some("function double(x) { return x * 2; }".to_string()),
                             entry_point: Some("double".to_string()),
@@ -205,6 +207,7 @@ mod tests {
                     OpenFlowModule {
                         id: "add_ten".to_string(),
                         value: OpenFlowModuleValue::Script {
+                            path: "addTen".to_string(),
                             language: Some("node".to_string()),
                             code: Some("function addTen(x) { return x + 10; }".to_string()),
                             entry_point: Some("addTen".to_string()),
@@ -215,7 +218,6 @@ mod tests {
             },
         };
 
-        // 5 → double → 10 → add_ten → 20
         let result = run_workflow(&spec, json!(5)).unwrap();
         assert_eq!(result, json!(20));
     }

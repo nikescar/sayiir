@@ -1,0 +1,27 @@
+{
+  "summary": "order-processing",
+  "value": {
+    "modules": [
+      {
+        "id": "validate-order",
+        "value": {
+          "type": "script",
+          "path": "validateOrder",
+          "language": "node",
+          "entry_point": "validateOrder",
+          "code": "function validateOrder(order) {\n  if (order.amount <= 0) throw new Error(\"Invalid amount\");\n  if (!order.customerEmail) throw new Error(\"Missing customer email\");\n  return { amount: order.amount, customerEmail: order.customerEmail, validated: true };\n}"
+        }
+      },
+      {
+        "id": "send-confirmation",
+        "value": {
+          "type": "script",
+          "path": "sendConfirmation",
+          "language": "node",
+          "entry_point": "sendConfirmation",
+          "code": "function sendConfirmation(order) {\n  return \"Order confirmed for \" + order.customerEmail + \", amount: $\" + order.amount;\n}"
+        }
+      }
+    ]
+  }
+}

@@ -17,7 +17,7 @@ struct Args {
     command: Command,
 }
 
-#[cfg(feature = "brimstone")]
+#[cfg(feature = "javascript")]
 #[derive(Parser)]
 enum Command {
     /// Export workflow to OpenFlow JSON and Mermaid markdown
@@ -54,7 +54,7 @@ enum Command {
         output_dir: PathBuf,
     },
 
-    /// Run pure JavaScript workflow with Brimstone interpreter (no external dependencies)
+    /// Run pure JavaScript workflow with rquickjs interpreter (no external dependencies)
     Run {
         /// Input OpenFlow JSON file
         #[arg(value_name = "FILE")]
@@ -66,7 +66,7 @@ enum Command {
     },
 }
 
-#[cfg(not(feature = "brimstone"))]
+#[cfg(not(feature = "javascript"))]
 #[derive(Parser)]
 enum Command {
     /// Export workflow to OpenFlow JSON and Mermaid markdown
@@ -131,9 +131,9 @@ fn main() -> error::ExportResult<()> {
                 .unwrap();
             rt.block_on(import_workflow_cmd(input, output_dir))?;
         }
-        #[cfg(feature = "brimstone")]
+        #[cfg(feature = "javascript")]
         Command::Run { workflow, input } => {
-            run_brimstone_workflow(workflow, input)?;
+            run_javascript_workflow(workflow, input)?;
         }
     }
 
@@ -371,8 +371,8 @@ async fn import_workflow_cmd(input: PathBuf, output_dir: PathBuf) -> error::Expo
     Ok(())
 }
 
-#[cfg(feature = "brimstone")]
-fn run_brimstone_workflow(workflow: PathBuf, input: Option<String>) -> error::ExportResult<()> {
+#[cfg(feature = "javascript")]
+fn run_javascript_workflow(workflow: PathBuf, input: Option<String>) -> error::ExportResult<()> {
     // Read workflow file
     let content = std::fs::read_to_string(&workflow).map_err(|e| error::ExportError::FileReadError {
         path: workflow.clone(),
@@ -386,7 +386,7 @@ fn run_brimstone_workflow(workflow: PathBuf, input: Option<String>) -> error::Ex
 
     // Validate pure JavaScript with no dependencies
     println!("→ Validating workflow...");
-    sayiir_openflow::brimstone::validate_pure_javascript(&spec)?;
+    sayiir_openflow::javascript::validate_pure_javascript(&spec)?;
     println!("✓ Validation passed (pure JavaScript, no dependencies)");
 
     // Parse input JSON
@@ -398,9 +398,9 @@ fn run_brimstone_workflow(workflow: PathBuf, input: Option<String>) -> error::Ex
         serde_json::json!({})
     };
 
-    // Run workflow with Brimstone
-    println!("→ Running workflow with Brimstone interpreter...");
-    let result = sayiir_openflow::brimstone::run_workflow(&spec, input_value)?;
+    // Run workflow with rquickjs
+    println!("→ Running workflow with rquickjs interpreter...");
+    let result = sayiir_openflow::javascript::run_workflow(&spec, input_value)?;
 
     // Print result
     println!("\n✓ Workflow completed:");

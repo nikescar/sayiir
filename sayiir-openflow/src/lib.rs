@@ -34,8 +34,8 @@ mod run;
 mod runtime;
 pub mod scan;
 
-#[cfg(feature = "brimstone")]
-pub mod brimstone;
+#[cfg(feature = "javascript")]
+pub mod javascript;
 
 pub use builder::{build_openflow_spec, TaskMetadata, Language};
 pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
