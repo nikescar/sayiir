@@ -16,6 +16,10 @@ documentation = "https://docs.rs/sayiir-openflow"
 name = "sayiir_openflow"
 path = "src/lib.rs"
 
+[features]
+default = []
+brimstone = ["dep:brimstone_core"]
+
 [[bin]]
 name = "cargo-sayiir-openflow"
 path = "src/bin/cargo-sayiir-openflow.rs"
@@ -39,6 +43,7 @@ tree-sitter-rust = "0.23"
 tree-sitter-python = "0.23"
 tree-sitter-javascript = "0.23"
 tree-sitter-typescript = "0.23"
+brimstone_core = { git = "https://github.com/0xleft/brimstone", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

@@ -17,6 +17,7 @@ struct Args {
     command: Command,
 }
 
+#[cfg(feature = "brimstone")]
 #[derive(Parser)]
 enum Command {
     /// Export workflow to OpenFlow JSON and Mermaid markdown
@@ -53,19 +54,53 @@ enum Command {
         output_dir: PathBuf,
     },
 
-    /// Run OpenFlow workflow directly
+    /// Run pure JavaScript workflow with Brimstone interpreter (no external dependencies)
     Run {
-        /// Input OpenFlow JSON or Mermaid file
+        /// Input OpenFlow JSON file
         #[arg(value_name = "FILE")]
         workflow: PathBuf,
 
         /// JSON input for workflow
         #[arg(short, long)]
         input: Option<String>,
+    },
+}
 
-        /// Timeout in seconds per task
-        #[arg(short, long, default_value = "30")]
-        timeout: u64,
+#[cfg(not(feature = "brimstone"))]
+#[derive(Parser)]
+enum Command {
+    /// Export workflow to OpenFlow JSON and Mermaid markdown
+    Export {
+        /// Input file (auto-detect if not specified)
+        #[arg(value_name = "FILE")]
+        input: Option<PathBuf>,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value = "both")]
+        format: Format,
+
+        /// JSON output path
+        #[arg(short, long, default_value = "workflow.json")]
+        output: PathBuf,
+
+        /// Mermaid output path
+        #[arg(short, long, default_value = "workflow.md")]
+        mermaid_output: PathBuf,
+
+        /// Dry run (don't write files)
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Import OpenFlow workflow and generate standalone project
+    Import {
+        /// Input OpenFlow JSON or Mermaid file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output directory for generated project
+        #[arg(short, long, default_value = "workflow")]
+        output_dir: PathBuf,
     },
 }
 
@@ -96,16 +131,9 @@ fn main() -> error::ExportResult<()> {
                 .unwrap();
             rt.block_on(import_workflow_cmd(input, output_dir))?;
         }
-        Command::Run {
-            workflow,
-            input,
-            timeout,
-        } => {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-            rt.block_on(run_workflow_cmd(workflow, input, timeout))?;
+        #[cfg(feature = "brimstone")]
+        Command::Run { workflow, input } => {
+            run_brimstone_workflow(workflow, input)?;
         }
     }
 
@@ -343,27 +371,23 @@ async fn import_workflow_cmd(input: PathBuf, output_dir: PathBuf) -> error::Expo
     Ok(())
 }
 
-async fn run_workflow_cmd(
-    workflow: PathBuf,
-    input: Option<String>,
-    timeout: u64,
-) -> error::ExportResult<()> {
-    use std::time::Duration;
-
+#[cfg(feature = "brimstone")]
+fn run_brimstone_workflow(workflow: PathBuf, input: Option<String>) -> error::ExportResult<()> {
     // Read workflow file
     let content = std::fs::read_to_string(&workflow).map_err(|e| error::ExportError::FileReadError {
         path: workflow.clone(),
         source: e,
     })?;
 
-    // Parse spec (auto-detect JSON vs Mermaid)
-    let spec = if workflow.extension().and_then(|s| s.to_str()) == Some("md") {
-        import_mermaid(&content)?
-    } else {
-        import_openflow_json(&content)?
-    };
+    // Parse spec (only JSON supported for Brimstone run)
+    let spec = import_openflow_json(&content)?;
 
     println!("✓ Loaded workflow: {}", spec.summary);
+
+    // Validate pure JavaScript with no dependencies
+    println!("→ Validating workflow...");
+    sayiir_openflow::brimstone::validate_pure_javascript(&spec)?;
+    println!("✓ Validation passed (pure JavaScript, no dependencies)");
 
     // Parse input JSON
     let input_value = if let Some(json_str) = input {
@@ -374,9 +398,9 @@ async fn run_workflow_cmd(
         serde_json::json!({})
     };
 
-    // Run workflow
-    println!("→ Running workflow...");
-    let result = run_workflow_with_timeout(&spec, input_value, Duration::from_secs(timeout)).await?;
+    // Run workflow with Brimstone
+    println!("→ Running workflow with Brimstone interpreter...");
+    let result = sayiir_openflow::brimstone::run_workflow(&spec, input_value)?;
 
     // Print result
     println!("\n✓ Workflow completed:");

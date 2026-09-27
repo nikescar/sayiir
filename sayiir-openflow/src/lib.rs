@@ -34,6 +34,9 @@ mod run;
 mod runtime;
 pub mod scan;
 
+#[cfg(feature = "brimstone")]
+pub mod brimstone;
+
 pub use builder::{build_openflow_spec, TaskMetadata, Language};
 pub use compile::{CachedModule, cleanup_stale_cache, compile_module};
 pub use deps::{parse_cargo_deps, parse_python_deps, parse_node_deps};
@@ -92,6 +95,39 @@ pub enum OpenFlowModuleValue {
         #[serde(skip_serializing_if = "Option::is_none")]
         dependencies: Option<serde_json::Map<String, serde_json::Value>>,
     },
+}
+
+/// Script fields for pattern matching
+#[derive(Debug, Clone)]
+pub struct ScriptFields {
+    /// Language
+    pub language: Option<String>,
+    /// Entry point
+    pub entry_point: Option<String>,
+    /// Code
+    pub code: Option<String>,
+    /// Dependencies
+    pub dependencies: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+impl OpenFlowModuleValue {
+    /// Extract script fields if this is a Script variant
+    pub fn as_script(&self) -> Option<ScriptFields> {
+        match self {
+            OpenFlowModuleValue::Script {
+                language,
+                entry_point,
+                code,
+                dependencies,
+                ..
+            } => Some(ScriptFields {
+                language: language.clone(),
+                entry_point: entry_point.clone(),
+                code: code.clone(),
+                dependencies: dependencies.clone(),
+            }),
+        }
+    }
 }
 
 /// Import preview summary

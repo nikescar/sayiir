@@ -10,15 +10,23 @@ cd sayiir-openflow
 cargo install --path . --bin cargo-sayiir-openflow
 ```
 
-**Option 2: Manual build and copy**
+**Option 2: With Brimstone JavaScript execution (optional)**
+```bash
+cd sayiir-openflow
+cargo install --path . --bin cargo-sayiir-openflow --features brimstone
+```
+
+**Option 3: Manual build and copy**
 ```bash
 cargo build --release --bin cargo-sayiir-openflow
 cp target/release/cargo-sayiir-openflow ~/.cargo/bin/
 ```
 
-**Option 3: Install from crates.io** (when published)
+**Option 4: Install from crates.io** (when published)
 ```bash
 cargo install sayiir-openflow
+# Or with Brimstone
+cargo install sayiir-openflow --features brimstone
 ```
 
 After installation, verify with:
@@ -98,29 +106,38 @@ my-workflow/
 └── README.md
 ```
 
-### Run Command
+### Run Command (Brimstone Feature Only)
 
-Execute workflows directly without generating a project:
+**⚠️ Requires `--features brimstone` during installation**
+
+Execute pure JavaScript workflows directly using the Brimstone interpreter:
 
 ```bash
-# Run workflow with JSON input
+# Run pure JavaScript workflow with JSON input
 cargo-sayiir-openflow sayiir-openflow run workflow.json \
-  --input '{"url": "https://example.com"}'
-
-# Run with custom timeout (default: 30s)
-cargo-sayiir-openflow sayiir-openflow run workflow.json \
-  --input '{"data": "test"}' \
-  --timeout 60
+  --input '{"value": 42}'
 
 # Run without input (empty JSON object)
 cargo-sayiir-openflow sayiir-openflow run workflow.json
 ```
 
+**Requirements:**
+- ✅ All tasks must be JavaScript (`language: "node"`)
+- ✅ Zero external dependencies (no `npm` packages)
+- ❌ Rust/Python tasks not supported
+- ❌ JavaScript with dependencies not supported
+
 **Features:**
-- Automatically compiles embedded code on first run
-- Caches compiled modules in `~/.sayiir/cache/`
+- Lightweight Brimstone interpreter (no Node.js required)
+- ~97% ECMAScript conformance (test262)
 - Chains task outputs → inputs sequentially
 - Returns final result as JSON
+
+**Why Brimstone?**
+- Fast execution for dependency-free JavaScript
+- Compact binary footprint
+- Standard-conforming ECMAScript implementation
+- No external runtime dependencies
 
 ## Cargo Plugin Usage
 
@@ -135,8 +152,8 @@ cargo sayiir-openflow export
 cargo sayiir-openflow import workflow.json --output-dir ./imported
 cd imported && cargo run
 
-# Run workflow directly
-cargo sayiir-openflow run workflow.json --input '{"url": "https://..."}'
+# Run pure JavaScript workflow (requires brimstone feature)
+cargo sayiir-openflow run workflow.json --input '{"value": 42}'
 ```
 
 ## Supported Languages
@@ -215,6 +232,47 @@ The export command uses Tree-sitter to extract clean, portable code from tasks. 
 - Produces runtime JavaScript, not TypeScript
 - Type annotations are stripped (e.g., `: Order` removed)
 - Arrow functions converted to named functions
+
+## Programmatic API Examples
+
+The `examples/` directory contains programmatic usage examples:
+
+### Export Examples
+```bash
+# Export Rust workflow
+cargo run --example export_rust
+
+# Export Python workflow
+cargo run --example export_python
+
+# Export JavaScript workflow
+cargo run --example export_javascript
+```
+
+### Import Example
+```bash
+# Import OpenFlow JSON and generate standalone project
+cargo run --example import_workflow
+```
+
+### Brimstone Execution Example
+```bash
+# Run pure JavaScript workflow with Brimstone (requires feature)
+cargo run --example brimstone_run --features brimstone
+```
+
+## Feature Flags
+
+| Feature | Description | Default |
+|---------|-------------|---------|
+| `brimstone` | Enables JavaScript execution via Brimstone interpreter | ❌ Disabled |
+
+**Enable Brimstone:**
+```bash
+cargo install --path . --features brimstone
+# Or in Cargo.toml
+sayiir-openflow = { version = "1.0", features = ["brimstone"] }
+```
 
 ## License
 
