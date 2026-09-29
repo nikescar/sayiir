@@ -1,0 +1,1 @@
+DROP INDEX idx_snapshots_inprogress_updated ON sayiir_workflow_snapshots;

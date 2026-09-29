@@ -1,0 +1,30 @@
+{
+  "summary": "Imported from Mermaid",
+  "value": {
+    "modules": [
+      {
+        "id": "timestamp_task",
+        "value": {
+          "type": "script",
+          "path": "timestamp_task",
+          "language": "rust",
+          "entry_point": "run",
+          "code": "use serde_json::{json, Value};\nuse chrono::Utc;\n\nfn run(_input: Value) -> Result<Value, String> {\n    let now = Utc::now();\n    Ok(json!({\"timestamp\": now.to_rfc3339()}))\n}",
+          "dependencies": {
+            "chrono": "0.4"
+          }
+        }
+      },
+      {
+        "id": "format_task",
+        "value": {
+          "type": "script",
+          "path": "format_task",
+          "language": "python",
+          "entry_point": "run",
+          "code": "def run(input_data):\n    return {\n        \"message\": f\"Timestamp: {input_data['timestamp']}\",\n        \"formatted\": True\n    }"
+        }
+      }
+    ]
+  }
+}
