@@ -1,12 +1,34 @@
-# Hello World — Node.js
+# Welcome Workflow
 
-Minimal Sayiir workflow in TypeScript.
-
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/sayiir/sayiir/tree/main/examples/hello-world-node?file=index.ts)
-
-## Run locally
-
-```bash
-pnpm install
-pnpm start
+```mermaid
+flowchart TD
+    fetch-user[Fetch User]
+    send-email[Send Email]
+    fetch-user --> send-email
 ```
+
+## Tasks
+
+### fetch-user
+
+**Language:** node  
+**Entry:** fetchUser
+
+```javascript
+function fetchUser(id) {
+  return { id: id, name: "Alice" };
+}
+```
+
+### send-email
+
+**Language:** node  
+**Entry:** sendEmail
+
+```javascript
+function sendEmail(user) {
+  return "Sent welcome to " + user.name;
+}
+```
+
+

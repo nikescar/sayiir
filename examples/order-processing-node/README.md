@@ -1,48 +1,36 @@
-# Order Processing (Node.js)
-
-Order processing pipeline that validates orders, charges payment + checks inventory
-in parallel, then **parks until a shipping webhook arrives** before sending confirmation.
-
-Demonstrates fork/join, signals from webhooks, retries, and durable execution.
-
-Matches the [Order Processing tutorial](https://docs.sayiir.dev/tutorials/order-processing-nodejs/).
-
-## Sayiir features demonstrated
-
-| Feature | How it's used |
-|---|---|
-| **Fork/join** | Charge payment and check inventory in parallel |
-| **Retries + backoff** | Payment charges with exponential backoff |
-| **Signals** | Shipping provider webhook delivers tracking info |
-| **Durability** | Workflow parks in backend while waiting for shipment |
-
-## Workflow
+# Order Processing Workflow
 
 ```mermaid
-graph TD
-    A[validate] --> B[charge_payment]
-    A --> C[check_inventory]
-    B --> D[finalize — join]
-    C --> D
-    D --> E[wait_for_signal\nshipping webhook · 72h timeout]
-    E --> F[send_confirmation]
+flowchart TD
+    validate-order[Validate Order]
+    send-confirmation[Send Confirmation]
+    validate-order --> send-confirmation
 ```
 
-## Prerequisites
+## Tasks
 
-- Node.js 20+
+### validate-order
 
-## Run
+**Language:** node  
+**Entry:** validateOrder
 
-```bash
-pnpm install
-pnpm start
+```javascript
+function validateOrder(order) {
+  if (order.amount <= 0) throw new Error("Invalid amount");
+  if (!order.customerEmail) throw new Error("Missing customer email");
+  return { amount: order.amount, customerEmail: order.customerEmail, validated: true };
+}
 ```
 
-Then simulate a shipping provider webhook:
+### send-confirmation
 
-```bash
-curl -X POST http://localhost:3000/webhooks/shipping \
-  -H "Content-Type: application/json" \
-  -d '{"orderId": "order-1", "trackingNumber": "1Z999AA10123456784", "carrier": "ups"}'
+**Language:** node  
+**Entry:** sendConfirmation
+
+```javascript
+function sendConfirmation(order) {
+  return "Order confirmed for " + order.customerEmail + ", amount: $" + order.amount;
+}
 ```
+
+

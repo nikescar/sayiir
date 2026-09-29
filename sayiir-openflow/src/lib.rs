@@ -309,9 +309,139 @@ pub fn export_openflow_json(spec: &OpenFlowSpec) -> Result<String> {
 
 /// Import Mermaid markdown flowchart
 ///
-/// Parses Mermaid flowchart syntax and converts to OpenFlowSpec.
-/// Basic implementation - supports simple flowchart syntax.
+/// Parses GitHub-friendly Mermaid markdown and converts to OpenFlowSpec.
+/// Supports standard markdown structure with Mermaid diagrams and code blocks.
 pub fn import_mermaid(markdown: &str) -> Result<OpenFlowSpec> {
+    use std::collections::HashMap;
+
+    let lines: Vec<&str> = markdown.lines().collect();
+
+    // Parse summary from h1 header
+    let mut summary = "workflow".to_string();
+    for line in &lines {
+        let trimmed = line.trim();
+        if trimmed.starts_with("# ") {
+            summary = trimmed[2..]
+                .replace(" Workflow", "")
+                .to_lowercase();
+            break;
+        }
+    }
+
+    // Extract task order from mermaid flowchart
+    let mut task_order: Vec<String> = Vec::new();
+    let mut in_mermaid = false;
+    for line in &lines {
+        let trimmed = line.trim();
+        if trimmed == "```mermaid" {
+            in_mermaid = true;
+        } else if trimmed == "```" && in_mermaid {
+            in_mermaid = false;
+        } else if in_mermaid && trimmed.contains('[') && trimmed.contains(']') {
+            // Extract task ID from "task-id[Label]"
+            if let Some(idx) = trimmed.find('[') {
+                let task_id = trimmed[..idx].trim().to_string();
+                if !task_id.is_empty()
+                    && task_id != "flowchart"
+                    && task_id != "TD"
+                    && !task_order.contains(&task_id) {
+                    task_order.push(task_id);
+                }
+            }
+        }
+    }
+
+    // Parse task sections
+    let mut modules: HashMap<String, OpenFlowModule> = HashMap::new();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i].trim();
+
+        // Find task section header (### task-id)
+        if line.starts_with("### ") {
+            let task_id = line[4..].trim().to_string();
+            let mut language: Option<String> = None;
+            let mut entry_point: Option<String> = None;
+            let mut code_lines: Vec<String> = Vec::new();
+            let mut in_code = false;
+
+            i += 1;
+            while i < lines.len() {
+                let curr = lines[i];
+
+                // Stop at next task section
+                if curr.starts_with("### ") {
+                    i -= 1;
+                    break;
+                }
+
+                if curr.contains("**Language:**") {
+                    language = curr.split("**Language:**")
+                        .nth(1)
+                        .map(|s| s.trim().to_string());
+                } else if curr.contains("**Entry:**") {
+                    entry_point = curr.split("**Entry:**")
+                        .nth(1)
+                        .map(|s| s.trim().to_string());
+                } else if curr.trim().starts_with("```") {
+                    if !in_code {
+                        in_code = true;
+                    } else {
+                        in_code = false;
+                        break;
+                    }
+                } else if in_code {
+                    code_lines.push(curr.to_string());
+                }
+
+                i += 1;
+            }
+
+            if let (Some(lang), Some(entry)) = (language, entry_point) {
+                let code = code_lines.join("\n");
+                modules.insert(
+                    task_id.clone(),
+                    OpenFlowModule {
+                        id: task_id.clone(),
+                        value: OpenFlowModuleValue::Script {
+                            path: entry.clone(),
+                            language: Some(lang),
+                            entry_point: Some(entry),
+                            code: Some(code),
+                            dependencies: None,
+                        },
+                    },
+                );
+            }
+        }
+
+        i += 1;
+    }
+
+    // Reorder modules based on mermaid flowchart
+    let mut ordered_modules: Vec<OpenFlowModule> = Vec::new();
+    for task_id in &task_order {
+        if let Some(module) = modules.remove(task_id) {
+            ordered_modules.push(module);
+        }
+    }
+
+    // Add any remaining modules not in flowchart
+    for (_, module) in modules {
+        ordered_modules.push(module);
+    }
+
+    Ok(OpenFlowSpec {
+        summary,
+        value: OpenFlowValue {
+            modules: ordered_modules,
+        },
+    })
+}
+
+// Legacy format support - kept for backward compatibility
+fn import_mermaid_legacy(markdown: &str) -> Result<OpenFlowSpec> {
     use std::collections::HashMap;
 
     // Parse workflow summary if present
@@ -499,59 +629,76 @@ fn parse_task_metadata(line: &str) -> Option<(String, String)> {
 
 /// Export OpenFlowSpec to Mermaid markdown
 pub fn export_mermaid(spec: &OpenFlowSpec) -> Result<String> {
-    let mut mermaid = String::new();
+    let mut output = String::new();
 
-    // Add summary comment
-    mermaid.push_str(&format!("%%% Summary: {}\n", spec.summary));
-    mermaid.push_str("flowchart TD\n");
+    // Title - capitalize summary
+    let title = spec.summary
+        .split('-')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    output.push_str(&format!("# {} Workflow\n\n", title));
 
-    // Generate flowchart nodes
+    // Mermaid flowchart
+    output.push_str("```mermaid\n");
+    output.push_str("flowchart TD\n");
+
+    // Generate nodes with formatted labels
     for module in &spec.value.modules {
-        mermaid.push_str(&format!("    {}[{}]\n", module.id, module.id));
+        let label = module.id
+            .split('-')
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        output.push_str(&format!("    {}[{}]\n", module.id, label));
     }
 
-    // Add arrows between sequential modules
+    // Add arrows
     for i in 0..spec.value.modules.len().saturating_sub(1) {
         let current = &spec.value.modules[i];
         let next = &spec.value.modules[i + 1];
-        mermaid.push_str(&format!("    {} --> {}\n", current.id, next.id));
+        output.push_str(&format!("    {} --> {}\n", current.id, next.id));
     }
+    output.push_str("```\n\n");
 
-    // Append code blocks for modules with embedded code
+    // Tasks section
+    output.push_str("## Tasks\n\n");
     for module in &spec.value.modules {
         if let OpenFlowModuleValue::Script {
             language: Some(lang),
             entry_point: Some(entry),
             code: Some(code),
-            dependencies,
             ..
         } = &module.value
         {
-            mermaid.push_str("\n");
+            output.push_str(&format!("### {}\n\n", module.id));
+            output.push_str(&format!("**Language:** {}  \n", lang));
+            output.push_str(&format!("**Entry:** {}\n\n", entry));
 
-            // Metadata comments
-            mermaid.push_str(&format!("%%% {} ({})\n", module.id, lang));
-            mermaid.push_str(&format!("%%% Entry: {}\n", entry));
-
-            // Dependencies as JSON
-            let deps_json = if let Some(deps) = dependencies {
-                serde_json::to_string(deps)?
-            } else {
-                "{}".to_string()
-            };
-            mermaid.push_str(&format!("%%% Dependencies: {}\n", deps_json));
-
-            // Code block with language tag
-            mermaid.push_str(&format!("```{}\n", lang));
-            mermaid.push_str(code);
+            // Map node to proper language tag for syntax highlighting
+            let lang_tag = if lang == "node" { "javascript" } else { lang.as_str() };
+            output.push_str(&format!("```{}\n", lang_tag));
+            output.push_str(code);
             if !code.ends_with('\n') {
-                mermaid.push('\n');
+                output.push('\n');
             }
-            mermaid.push_str("```\n");
+            output.push_str("```\n\n");
         }
     }
 
-    Ok(mermaid)
+    Ok(output)
 }
 
 #[cfg(test)]
